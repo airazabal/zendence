@@ -1,6 +1,5 @@
 package com.example.zendence
 
-
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -10,25 +9,46 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
@@ -65,7 +85,7 @@ abstract class AppDatabase : RoomDatabase() {
 // --- 2. VIEWMODEL ---
 data class IntervalBell(
     val id: String = UUID.randomUUID().toString(),
-    val atSecFromStart: Int, // Changed to be from start
+    val atSecFromStart: Int,
     val soundType: String,
     val repeats: Int = 1
 )
@@ -81,13 +101,40 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
 
     var isStartingBellPlaying by mutableStateOf(false)
     var isRunning by mutableStateOf(false)
-    var initialDurationSec by mutableIntStateOf(600)
-    var timeLeftSec by mutableIntStateOf(600) // Default 10 mins
+    var initialDurationSec by mutableIntStateOf(2700) // Default 45 mins
+    var timeLeftSec by mutableIntStateOf(2700)
     var selectedMusic by mutableStateOf("Nature Stream")
-    var volume by mutableFloatStateOf(1.0f)
+    var volume by mutableFloatStateOf(0.5f)
 
     var startingBellEnabled by mutableStateOf(true)
-    val intervalBells = mutableStateListOf<IntervalBell>()
+    val intervalBells = mutableStateListOf<IntervalBell>(
+        IntervalBell(atSecFromStart = 900, soundType = "interval_bell", repeats = 1),
+        IntervalBell(atSecFromStart = 1800, soundType = "interval_bell", repeats = 2),
+        IntervalBell(atSecFromStart = 2699, soundType = "interval_bell", repeats = 3)
+    )
+
+    fun toggleTimer(scope: kotlinx.coroutines.CoroutineScope, onPlayBell: (String, Int) -> Unit) {
+        if (isRunning) {
+            isRunning = false
+        } else {
+            startTimer(scope, onPlayBell)
+        }
+    }
+
+    fun resetToDefaults() {
+        if (!isRunning) {
+            initialDurationSec = 2700
+            timeLeftSec = 2700
+            intervalBells.clear()
+            intervalBells.addAll(
+                listOf(
+                    IntervalBell(atSecFromStart = 900, soundType = "interval_bell", repeats = 1),
+                    IntervalBell(atSecFromStart = 1800, soundType = "interval_bell", repeats = 2),
+                    IntervalBell(atSecFromStart = 2699, soundType = "interval_bell", repeats = 3)
+                )
+            )
+        }
+    }
 
     fun incrementDuration() {
         if (!isRunning) {
@@ -111,10 +158,12 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
     }
 
     fun startTimer(scope: kotlinx.coroutines.CoroutineScope, onPlayBell: (String, Int) -> Unit = { _, _ -> }) {
+        if (timeLeftSec <= 0) {
+            timeLeftSec = initialDurationSec
+        }
         val isFirstStart = timeLeftSec == initialDurationSec
         isRunning = true
         
-        // Try to set Do Not Disturb
         if (notificationManager.isNotificationPolicyAccessGranted) {
             previousInterruptionFilter = notificationManager.currentInterruptionFilter
             notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
@@ -126,7 +175,6 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
                 onPlayBell("starting_bell", 1)
             }
 
-            // Snapshot the bells to avoid concurrent modification during iteration
             val snapshotBells = intervalBells.toList()
 
             while (timeLeftSec > 0 && isRunning) {
@@ -140,8 +188,8 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
                     }
                 }
             }
-            if (timeLeftSec <= 0 && isRunning) { // Only play end bell if it wasn't manually stopped
-                onPlayBell("starting_bell", 1) // End bell
+            if (timeLeftSec <= 0 && isRunning) {
+                onPlayBell("starting_bell", 1)
                 saveSession(initialDurationSec / 60)
                 stopAndResetDND()
             }
@@ -181,9 +229,12 @@ fun MeditationApp(vm: MeditationViewModel) {
     val scope = rememberCoroutineScope()
     var showIntervalDialog by remember { mutableStateOf(false) }
     
+    var isEditingDuration by remember { mutableStateOf(false) }
+    var editValue by remember { mutableStateOf("") }
+    
     val notificationManager = remember { context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager }
+    val focusRequester = remember { FocusRequester() }
 
-    // Handle Keep Screen On
     val activity = context as? ComponentActivity
     SideEffect {
         if (vm.isRunning) {
@@ -193,7 +244,6 @@ fun MeditationApp(vm: MeditationViewModel) {
         }
     }
 
-    // Audio Player setup
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
             val mediaItem = MediaItem.fromUri("android.resource://${context.packageName}/raw/nature_stream")
@@ -219,7 +269,7 @@ fun MeditationApp(vm: MeditationViewModel) {
         val resId = when (type) {
             "starting_bell" -> R.raw.starting_bell
             "interval_bell" -> R.raw.interval_bell
-            else -> R.raw.starting_bell // Fallback
+            else -> R.raw.starting_bell
         }
         val mediaItem = MediaItem.fromUri("android.resource://${context.packageName}/$resId")
         bellPlayer.stop()
@@ -244,7 +294,6 @@ fun MeditationApp(vm: MeditationViewModel) {
         }
     }
 
-    // Handle Stop/Reset
     LaunchedEffect(vm.timeLeftSec) {
         if (!vm.isRunning && vm.timeLeftSec == vm.initialDurationSec) {
             exoPlayer.seekTo(0)
@@ -258,7 +307,43 @@ fun MeditationApp(vm: MeditationViewModel) {
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    if (showIntervalDialog) {
+        IntervalBellDialog(
+            onDismiss = { showIntervalDialog = false },
+            onConfirm = { time, sound, repeats ->
+                vm.intervalBells.add(IntervalBell(atSecFromStart = time, soundType = sound, repeats = repeats))
+                showIntervalDialog = false
+            },
+            maxSec = vm.initialDurationSec
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent { keyEvent ->
+                if (!isEditingDuration && keyEvent.key == Key.Spacebar) {
+                    if (keyEvent.type == KeyEventType.KeyUp) {
+                        vm.toggleTimer(scope) { type, repeats -> playBell(type, repeats) }
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
+            .focusRequester(focusRequester)
+            .focusable()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                focusRequester.requestFocus()
+            }
+    ) {
         Image(
             painter = painterResource(id = R.drawable.zendence_background),
             contentDescription = null,
@@ -269,9 +354,19 @@ fun MeditationApp(vm: MeditationViewModel) {
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
-                TopAppBar(
-                    title = { Text("Zendence Timer", color = Color.White) },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                CenterAlignedTopAppBar(
+                    title = {
+                        Text(
+                            "ZENDENCE",
+                            style = TextStyle(
+                                fontWeight = FontWeight.Light,
+                                letterSpacing = 4.sp,
+                                color = Color.White,
+                                shadow = Shadow(color = Color.Black, blurRadius = 8f)
+                            )
+                        )
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
                     actions = {
                         IconButton(onClick = { activity?.finish() }) {
                             Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Exit", tint = Color.White)
@@ -280,191 +375,275 @@ fun MeditationApp(vm: MeditationViewModel) {
                 )
             }
         ) { padding ->
-            Column(
+            LazyColumn(
                 modifier = Modifier
                     .padding(padding)
                     .fillMaxSize()
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                // Timer Display with +/- and Direct Entry
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (!vm.isRunning) {
-                        IconButton(onClick = { vm.decrementDuration() }) {
-                            Text("-", style = MaterialTheme.typography.displayMedium, color = Color.White)
-                        }
-                    }
-
-                    var isEditing by remember { mutableStateOf(false) }
-                    var editValue by remember { mutableStateOf("") }
-
-                    if (isEditing && !vm.isRunning) {
-                        OutlinedTextField(
-                            value = editValue,
-                            onValueChange = { editValue = it },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.width(100.dp),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color.White,
-                                unfocusedBorderColor = Color.White
-                            ),
-                            keyboardActions = KeyboardActions(onDone = {
-                                val mins = editValue.toIntOrNull() ?: 0
-                                if (mins > 0) vm.updateDuration(mins)
-                                isEditing = false
-                            })
-                        )
-                    } else {
-                        Text(
-                            text = String.format(Locale.getDefault(), "%02d:%02d", vm.timeLeftSec / 60, vm.timeLeftSec % 60),
-                            style = MaterialTheme.typography.displayLarge,
+                item {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(260.dp)) {
+                        CircularProgressIndicator(
+                            progress = { vm.timeLeftSec.toFloat() / vm.initialDurationSec },
+                            modifier = Modifier.fillMaxSize(),
                             color = Color.White,
-                            modifier = Modifier.clickable(enabled = !vm.isRunning) {
-                                editValue = (vm.initialDurationSec / 60).toString()
-                                isEditing = true
-                            }
+                            strokeWidth = 4.dp,
+                            trackColor = Color.White.copy(alpha = 0.2f),
                         )
-                    }
-
-                    if (!vm.isRunning) {
-                        IconButton(onClick = { vm.incrementDuration() }) {
-                            Text("+", style = MaterialTheme.typography.displayMedium, color = Color.White)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Music Selection
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Sound: ", color = Color.White)
-                    Text(vm.selectedMusic, style = MaterialTheme.typography.bodyLarge, color = Color.White)
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Volume Control
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Volume: ", color = Color.White)
-                    Slider(
-                        value = vm.volume,
-                        onValueChange = { vm.volume = it },
-                        modifier = Modifier.fillMaxWidth(0.8f),
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = Color.White,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.5f)
-                        )
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Bell Settings
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.5f))
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Starting/Ending Bell", color = Color.White)
-                            Spacer(modifier = Modifier.weight(1f))
-                            Switch(checked = vm.startingBellEnabled, onCheckedChange = { vm.startingBellEnabled = it })
-                        }
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.White.copy(alpha = 0.3f))
-                        Text("Interval Bells", style = MaterialTheme.typography.titleMedium, color = Color.White)
                         
-                        vm.intervalBells.forEach { bell ->
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                val repeatSuffix = if (bell.repeats > 1) " (x${bell.repeats})" else ""
-                                Text("${bell.atSecFromStart / 60}m ${bell.atSecFromStart % 60}s from start (${bell.soundType})$repeatSuffix", color = Color.White)
-                                Spacer(modifier = Modifier.weight(1f))
-                                IconButton(onClick = { vm.intervalBells.remove(bell) }) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.White)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (!vm.isRunning) {
+                                    IconButton(onClick = { vm.decrementDuration() }) {
+                                        Icon(Icons.Rounded.KeyboardArrowLeft, contentDescription = "Minus", tint = Color.White)
+                                    }
+                                }
+
+                                if (isEditingDuration && !vm.isRunning) {
+                                    OutlinedTextField(
+                                        value = editValue,
+                                        onValueChange = { editValue = it },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        modifier = Modifier.width(100.dp),
+                                        singleLine = true,
+                                        textStyle = TextStyle(color = Color.White, textAlign = androidx.compose.ui.text.style.TextAlign.Center, fontSize = 32.sp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = Color.White,
+                                            unfocusedBorderColor = Color.White.copy(alpha = 0.5f),
+                                            cursorColor = Color.White
+                                        ),
+                                        keyboardActions = KeyboardActions(onDone = {
+                                            val mins = editValue.toIntOrNull() ?: 0
+                                            if (mins > 0) vm.updateDuration(mins)
+                                            isEditingDuration = false
+                                        })
+                                    )
+                                } else {
+                                    Text(
+                                        text = String.format(Locale.getDefault(), "%02d:%02d", vm.timeLeftSec / 60, vm.timeLeftSec % 60),
+                                        style = TextStyle(
+                                            fontSize = 64.sp,
+                                            fontWeight = FontWeight.ExtraLight,
+                                            color = Color.White,
+                                            shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 12f)
+                                        ),
+                                        modifier = Modifier.clickable(enabled = !vm.isRunning) {
+                                            editValue = (vm.initialDurationSec / 60).toString()
+                                            isEditingDuration = true
+                                        }
+                                    )
+                                }
+
+                                if (!vm.isRunning) {
+                                    IconButton(onClick = { vm.incrementDuration() }) {
+                                        Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = "Plus", tint = Color.White)
+                                    }
                                 }
                             }
-                        }
-                        
-                        Button(
-                            onClick = { showIntervalDialog = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !vm.isRunning,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.3f), contentColor = Color.White)
-                        ) {
-                            Text("Add Interval Bell")
+                            Text(
+                                text = if (vm.isRunning) "BREATHE" else "READY",
+                                style = TextStyle(
+                                    fontWeight = FontWeight.Light,
+                                    letterSpacing = 2.sp,
+                                    color = Color.White.copy(alpha = 0.7f)
+                                )
+                            )
                         }
                     }
                 }
 
-                if (showIntervalDialog) {
-                    IntervalBellDialog(
-                        onDismiss = { showIntervalDialog = false },
-                        onConfirm = { atSecFromStart, type, repeats ->
-                            vm.intervalBells.add(IntervalBell(atSecFromStart = atSecFromStart, soundType = type, repeats = repeats))
-                            showIntervalDialog = false
-                        },
-                        maxSec = vm.initialDurationSec
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Controls
-                if (!notificationManager.isNotificationPolicyAccessGranted) {
-                    Button(
-                        onClick = {
-                            val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
-                            context.startActivity(intent)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color.White.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(24.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
                     ) {
-                        Text("Enable 'Do Not Disturb' Permission")
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            if (vm.isRunning) {
-                                vm.isRunning = false
-                            } else {
-                                vm.startTimer(scope) { type, repeats -> playBell(type, repeats) }
+                        Column(modifier = Modifier.padding(20.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(vm.selectedMusic, style = MaterialTheme.typography.bodyLarge, color = Color.White)
                             }
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(if (vm.isRunning) "Pause" else "Start Meditation")
-                    }
 
-                    if (!vm.isRunning && vm.timeLeftSec < vm.initialDurationSec) {
-                        OutlinedButton(
-                            onClick = { vm.stopTimer(scope) },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(if (vm.timeLeftSec == 0) "Reset" else "Stop")
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.VolumeUp, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Slider(
+                                    value = vm.volume,
+                                    onValueChange = { vm.volume = it },
+                                    modifier = Modifier.weight(1f),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = Color.White,
+                                        activeTrackColor = Color.White,
+                                        inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                                    )
+                                )
+                            }
                         }
                     }
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp), color = Color.White.copy(alpha = 0.3f))
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.4f)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                    ) {
+                        Column(modifier = Modifier.padding(20.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Starting/Ending Bell", color = Color.White, fontWeight = FontWeight.Medium)
+                                Spacer(modifier = Modifier.weight(1f))
+                                Switch(
+                                    checked = vm.startingBellEnabled,
+                                    onCheckedChange = { vm.startingBellEnabled = it },
+                                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color.White.copy(alpha = 0.5f))
+                                )
+                            }
+                            
+                            if (vm.intervalBells.isNotEmpty()) {
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.1f))
+                                Text("Interval Bells", style = MaterialTheme.typography.titleSmall, color = Color.White.copy(alpha = 0.6f))
+                                
+                                vm.intervalBells.forEach { bell ->
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                                        val repeatSuffix = if (bell.repeats > 1) " (x${bell.repeats})" else ""
+                                        Text("${bell.atSecFromStart / 60}m ${bell.atSecFromStart % 60}s", color = Color.White)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(bell.soundType.replace("_", " "), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                                        Text(repeatSuffix, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        IconButton(onClick = { vm.intervalBells.remove(bell) }, modifier = Modifier.size(24.dp)) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(12.dp))
+                            
+                            OutlinedButton(
+                                onClick = { showIntervalDialog = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !vm.isRunning,
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                            ) {
+                                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Add Interval Bell")
+                            }
+                        }
+                    }
+                }
 
-                // History List
-                Text("Past Meditations", style = MaterialTheme.typography.headlineSmall, color = Color.White)
-                LazyColumn {
-                    items(history) { session ->
-                        val date = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(session.timestamp))
-                        ListItem(
-                            headlineContent = { Text("${session.durationMinutes} Minute Session", color = Color.White) },
-                            supportingContent = { Text(date, color = Color.White.copy(alpha = 0.7f)) },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Button(
+                            onClick = { vm.toggleTimer(scope) { type, repeats -> playBell(type, repeats) } },
+                            modifier = Modifier.weight(1f).height(64.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White,
+                                contentColor = Color.Black
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+                        ) {
+                            Icon(if (vm.isRunning) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (vm.isRunning) "PAUSE" 
+                                       else if (vm.timeLeftSec < vm.initialDurationSec) "RESUME" 
+                                       else "START", 
+                                fontWeight = FontWeight.Bold, 
+                                letterSpacing = 1.sp
+                            )
+                        }
+
+                        if (vm.isRunning || vm.timeLeftSec < vm.initialDurationSec) {
+                            Button(
+                                onClick = { vm.stopTimer(scope) },
+                                modifier = Modifier.weight(1f).height(64.dp),
+                                shape = RoundedCornerShape(20.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.White.copy(alpha = 0.2f),
+                                    contentColor = Color.White
+                                ),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
+                            ) {
+                                Icon(Icons.Rounded.Stop, contentDescription = "Stop")
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("STOP", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                            }
+                        }
+                    }
+
+                    if (!notificationManager.isNotificationPolicyAccessGranted) {
+                        TextButton(
+                            onClick = {
+                                val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
+                            Text("Enable Do Not Disturb for silence", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+                        }
+                    }
+                }
+
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            "JOURNAL",
+                            style = TextStyle(
+                                fontWeight = FontWeight.Light,
+                                letterSpacing = 2.sp,
+                                color = Color.White.copy(alpha = 0.8f)
+                            )
                         )
+                        Text("${history.size} sessions", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.1f))
+                }
+
+                items(history) { session ->
+                    val date = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(session.timestamp))
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color.White.copy(alpha = 0.05f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier.size(40.dp).background(Color.White.copy(alpha = 0.1f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("${session.durationMinutes}", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column {
+                                Text("Meditation Session", color = Color.White, fontWeight = FontWeight.Medium)
+                                Text(date, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                            }
+                        }
                     }
                 }
             }
@@ -550,6 +729,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val vm: MeditationViewModel = viewModel(factory = object : androidx.lifecycle.ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    @Suppress("UNCHECKED_CAST")
                     return MeditationViewModel(application) as T
                 }
             })
