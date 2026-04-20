@@ -2,10 +2,14 @@ package com.example.zendence.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
+val ZenPrimary = Color(0xFF6A8CAF) // Calm blue
+val ZenSecondary = Color(0xFF94A684) // Soft green
+val ZenTertiary = Color(0xFFC7BCA1) // Sand/earth tone
+val ZenBackground = Color(0xFF1B242C) // Deep dark blue-gray
+val ZenSurface = Color(0xFF2D3844) // Slightly lighter dark blue-gray
+val ZenAccent = Color(0xFFD4A373) // Warm muted orange for highlights
 
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+// Light variants for dark theme
+val ZenPrimaryLight = Color(0xFFA3BDD3)
+val ZenSecondaryLight = Color(0xFFB8C4AC)
+val ZenTertiaryLight = Color(0xFFDBD3C3)
