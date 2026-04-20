@@ -113,7 +113,8 @@ data class IntervalBell(
     val id: String = UUID.randomUUID().toString(),
     val atSecFromStart: Int,
     val soundType: String,
-    val repeats: Int = 1
+    val repeats: Int = 1,
+    val volume: Float = 1.0f
 )
 
 class MeditationViewModel(application: android.app.Application) : ViewModel() {
@@ -163,13 +164,14 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
     var volume by mutableFloatStateOf(0.5f)
 
     var startingBellEnabled by mutableStateOf(true)
+    var startingBellVolume by mutableFloatStateOf(0.7f)
     val intervalBells = mutableStateListOf<IntervalBell>(
-        IntervalBell(atSecFromStart = 900, soundType = "interval_bell", repeats = 1),
-        IntervalBell(atSecFromStart = 1800, soundType = "interval_bell", repeats = 2),
-        IntervalBell(atSecFromStart = 2699, soundType = "interval_bell", repeats = 3)
+        IntervalBell(atSecFromStart = 900, soundType = "interval_bell", repeats = 1, volume = 0.5f),
+        IntervalBell(atSecFromStart = 1800, soundType = "interval_bell", repeats = 2, volume = 0.6f),
+        IntervalBell(atSecFromStart = 2699, soundType = "interval_bell", repeats = 3, volume = 0.7f)
     )
 
-    fun toggleTimer(scope: kotlinx.coroutines.CoroutineScope, onPlayBell: (String, Int) -> Unit) {
+    fun toggleTimer(scope: kotlinx.coroutines.CoroutineScope, onPlayBell: (String, Int, Float) -> Unit) {
         if (isRunning) {
             isRunning = false
         } else {
@@ -180,7 +182,7 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
     fun savePreset(name: String, scope: kotlinx.coroutines.CoroutineScope) {
         val bellsJson = intervalBells
             .filter { it.atSecFromStart < initialDurationSec }
-            .joinToString("|") { "${it.atSecFromStart}:${it.repeats}:${it.soundType}" }
+            .joinToString("|") { "${it.atSecFromStart}:${it.repeats}:${it.soundType}:${it.volume}" }
         val preset = Preset(
             name = name,
             durationMin = initialDurationSec / 60,
@@ -201,12 +203,14 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
             if (preset.intervalBellsJson.isNotEmpty()) {
                 preset.intervalBellsJson.split("|").forEach {
                     val parts = it.split(":")
-                    if (parts.size == 3) {
+                    if (parts.size >= 3) {
+                        val vol = if (parts.size == 4) parts[3].toFloatOrNull() ?: 1.0f else 1.0f
                         intervalBells.add(
                             IntervalBell(
                                 atSecFromStart = parts[0].toInt(),
                                 repeats = parts[1].toInt(),
-                                soundType = parts[2]
+                                soundType = parts[2],
+                                volume = vol
                             )
                         )
                     }
@@ -237,9 +241,9 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
             intervalBells.clear()
             intervalBells.addAll(
                 listOf(
-                    IntervalBell(atSecFromStart = 900, soundType = "interval_bell", repeats = 1),
-                    IntervalBell(atSecFromStart = 1800, soundType = "interval_bell", repeats = 2),
-                    IntervalBell(atSecFromStart = 2699, soundType = "interval_bell", repeats = 3)
+                    IntervalBell(atSecFromStart = 900, soundType = "interval_bell", repeats = 1, volume = 0.5f),
+                    IntervalBell(atSecFromStart = 1800, soundType = "interval_bell", repeats = 2, volume = 0.6f),
+                    IntervalBell(atSecFromStart = 2699, soundType = "interval_bell", repeats = 3, volume = 0.7f)
                 )
             )
         }
@@ -266,7 +270,7 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
         }
     }
 
-    fun startTimer(scope: kotlinx.coroutines.CoroutineScope, onPlayBell: (String, Int) -> Unit = { _, _ -> }) {
+    fun startTimer(scope: kotlinx.coroutines.CoroutineScope, onPlayBell: (String, Int, Float) -> Unit = { _, _, _ -> }) {
         if (timeLeftSec <= 0) {
             timeLeftSec = initialDurationSec
         }
@@ -281,7 +285,7 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
         scope.launch {
             if (startingBellEnabled && isFirstStart) {
                 isStartingBellPlaying = true
-                onPlayBell("starting_bell", 1)
+                onPlayBell("starting_bell", 1, startingBellVolume)
             }
 
             val snapshotBells = intervalBells.toList()
@@ -293,12 +297,12 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
                 val elapsedSec = initialDurationSec - timeLeftSec
                 snapshotBells.forEach { bell ->
                     if (elapsedSec == bell.atSecFromStart) {
-                        onPlayBell(bell.soundType, bell.repeats)
+                        onPlayBell(bell.soundType, bell.repeats, bell.volume)
                     }
                 }
             }
             if (timeLeftSec <= 0 && isRunning) {
-                onPlayBell("starting_bell", 1)
+                onPlayBell("starting_bell", 1, startingBellVolume)
                 saveSession(initialDurationSec / 60)
                 stopAndResetDND()
             }
@@ -392,7 +396,7 @@ fun MeditationApp(vm: MeditationViewModel) {
         }
     }
 
-    fun playBell(type: String, repeats: Int = 1) {
+    fun playBell(type: String, repeats: Int = 1, bellVolume: Float = 1.0f) {
         val resId = when (type) {
             "starting_bell" -> R.raw.starting_bell
             "interval_bell" -> R.raw.interval_bell
@@ -401,6 +405,7 @@ fun MeditationApp(vm: MeditationViewModel) {
         val mediaItem = MediaItem.fromUri("android.resource://${context.packageName}/$resId")
         bellPlayer.stop()
         bellPlayer.clearMediaItems()
+        bellPlayer.volume = bellVolume
         repeat(repeats) {
             bellPlayer.addMediaItem(mediaItem)
         }
@@ -410,7 +415,6 @@ fun MeditationApp(vm: MeditationViewModel) {
 
     LaunchedEffect(vm.volume) {
         exoPlayer.volume = vm.volume
-        bellPlayer.volume = vm.volume
     }
 
     LaunchedEffect(vm.isRunning, vm.isStartingBellPlaying) {
@@ -441,8 +445,8 @@ fun MeditationApp(vm: MeditationViewModel) {
     if (showIntervalDialog) {
         IntervalBellDialog(
             onDismiss = { showIntervalDialog = false },
-            onConfirm = { time, sound, repeats ->
-                vm.intervalBells.add(IntervalBell(atSecFromStart = time, soundType = sound, repeats = repeats))
+            onConfirm = { time, sound, repeats, vol ->
+                vm.intervalBells.add(IntervalBell(atSecFromStart = time, soundType = sound, repeats = repeats, volume = vol))
                 showIntervalDialog = false
             },
             maxSec = vm.initialDurationSec
@@ -500,7 +504,7 @@ fun MeditationApp(vm: MeditationViewModel) {
             .onPreviewKeyEvent { keyEvent ->
                 if (!isEditingDuration && keyEvent.key == Key.Spacebar) {
                     if (keyEvent.type == KeyEventType.KeyUp) {
-                        vm.toggleTimer(scope) { type, repeats -> playBell(type, repeats) }
+                        vm.toggleTimer(scope) { type, repeats, vol -> playBell(type, repeats, vol) }
                     }
                     true
                 } else {
@@ -532,6 +536,22 @@ fun MeditationApp(vm: MeditationViewModel) {
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
+                Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 40.dp)) {
+                    val currentDateTime = remember {
+                        val sdf = SimpleDateFormat("EEE, MMM d\nh:mm a", Locale.getDefault())
+                        sdf.format(Date())
+                    }
+                    Text(
+                        text = currentDateTime,
+                        style = TextStyle(
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Light,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                            shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 8f)
+                        ),
+                        modifier = Modifier.align(Alignment.TopStart)
+                    )
+                }
                 CenterAlignedTopAppBar(
                     title = {
                         Text(
@@ -688,7 +708,14 @@ fun MeditationApp(vm: MeditationViewModel) {
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(preset.name, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, style = TextStyle(shadow = Shadow(Color.Black.copy(alpha = 0.3f), blurRadius = 4f)))
-                                            Text("${preset.durationMin}m | Vol: ${(preset.volume * 100).toInt()}%", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), fontSize = 12.sp)
+                                            val bellCount = if (preset.intervalBellsJson.isEmpty()) 0 else preset.intervalBellsJson.split("|").size
+                                            val bellInfo = if (bellCount > 0) {
+                                                val firstBell = preset.intervalBellsJson.split("|")[0].split(":")
+                                                val firstTime = firstBell[0].toInt()
+                                                val firstVol = if (firstBell.size == 4) firstBell[3].toFloatOrNull() ?: 0.7f else 0.7f
+                                                " | $bellCount bells (1st @ ${firstTime / 60}m, Vol: ${(firstVol * 100).toInt()}%)"
+                                            } else ""
+                                            Text("${preset.durationMin}m | Music: ${(preset.volume * 100).toInt()}%$bellInfo", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), fontSize = 11.sp)
                                         }
                                         IconButton(onClick = { presetToEdit = preset }, modifier = Modifier.size(24.dp)) {
                                             Icon(Icons.Default.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
@@ -712,10 +739,10 @@ fun MeditationApp(vm: MeditationViewModel) {
                         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
                     ) {
                         Column(modifier = Modifier.padding(20.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(12.dp))
-                                Text(vm.selectedMusic, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Music Volume", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
@@ -798,6 +825,21 @@ fun MeditationApp(vm: MeditationViewModel) {
                                         modifier = Modifier.scale(0.8f)
                                     )
                                 }
+
+                                if (vm.startingBellEnabled) {
+                                    Column(modifier = Modifier.padding(top = 8.dp)) {
+                                        Text(
+                                            "Bell Volume: ${(vm.startingBellVolume * 100).toInt()}%",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Slider(
+                                            value = vm.startingBellVolume,
+                                            onValueChange = { vm.startingBellVolume = it },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
                                 
                                 if (vm.intervalBells.any { it.atSecFromStart < vm.initialDurationSec }) {
                                     Spacer(modifier = Modifier.height(16.dp))
@@ -810,6 +852,8 @@ fun MeditationApp(vm: MeditationViewModel) {
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(bell.soundType.replace("_", " "), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
                                             Text(repeatSuffix, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("${(bell.volume * 100).toInt()}%", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
                                             Spacer(modifier = Modifier.weight(1f))
                                             IconButton(onClick = { vm.intervalBells.remove(bell) }, modifier = Modifier.size(24.dp)) {
                                                 Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
@@ -843,7 +887,7 @@ fun MeditationApp(vm: MeditationViewModel) {
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Button(
-                            onClick = { vm.toggleTimer(scope) { type, repeats -> playBell(type, repeats) } },
+                            onClick = { vm.toggleTimer(scope) { type, repeats, vol -> playBell(type, repeats, vol) } },
                             modifier = Modifier.weight(1f).height(64.dp),
                             shape = RoundedCornerShape(20.dp),
                             colors = ButtonDefaults.buttonColors(
@@ -1063,8 +1107,9 @@ fun EditPresetDialog(
         if (preset.intervalBellsJson.isEmpty()) emptyList()
         else preset.intervalBellsJson.split("|").mapNotNull {
             val parts = it.split(":")
-            if (parts.size == 3) {
-                IntervalBell(atSecFromStart = parts[0].toInt(), repeats = parts[1].toInt(), soundType = parts[2])
+            if (parts.size >= 3) {
+                val vol = if (parts.size == 4) parts[3].toFloatOrNull() ?: 0.7f else 0.7f
+                IntervalBell(atSecFromStart = parts[0].toInt(), repeats = parts[1].toInt(), soundType = parts[2], volume = vol)
             } else null
         }
     }
@@ -1122,12 +1167,25 @@ fun EditPresetDialog(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                 Text("Interval Bells", style = MaterialTheme.typography.titleSmall)
                 
-                bells.forEach { bell ->
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Text("${bell.atSecFromStart / 60}m ${bell.atSecFromStart % 60}s", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                        IconButton(onClick = { bells.remove(bell) }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete Bell", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                bells.forEachIndexed { index, bell ->
+                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${bell.atSecFromStart / 60}m ${bell.atSecFromStart % 60}s", style = MaterialTheme.typography.bodyMedium)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("${(bell.volume * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(modifier = Modifier.weight(1f))
+                            IconButton(onClick = { bells.remove(bell) }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete Bell", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                            }
                         }
+                        Slider(
+                            value = bell.volume,
+                            onValueChange = { newVol ->
+                                bells[index] = bell.copy(volume = newVol)
+                            },
+                            valueRange = 0f..1f,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
                 
@@ -1141,7 +1199,7 @@ fun EditPresetDialog(
         confirmButton = {
             Button(onClick = {
                 val d = durationMin.toIntOrNull() ?: preset.durationMin
-                val bellsJson = bells.joinToString("|") { "${it.atSecFromStart}:${it.repeats}:${it.soundType}" }
+                val bellsJson = bells.joinToString("|") { "${it.atSecFromStart}:${it.repeats}:${it.soundType}:${it.volume}" }
                 onConfirm(preset.copy(name = name, durationMin = d, volume = volume, intervalBellsJson = bellsJson))
             }) { Text("Save Changes") }
         },
@@ -1154,8 +1212,8 @@ fun EditPresetDialog(
         val maxSec = (durationMin.toIntOrNull() ?: 0) * 60
         IntervalBellDialog(
             onDismiss = { showAddBell = false },
-            onConfirm = { time, sound, repeats ->
-                bells.add(IntervalBell(atSecFromStart = time, soundType = sound, repeats = repeats))
+            onConfirm = { time, sound, repeats, vol ->
+                bells.add(IntervalBell(atSecFromStart = time, soundType = sound, repeats = repeats, volume = vol))
                 showAddBell = false
             },
             maxSec = if (maxSec > 0) maxSec else 3600
@@ -1190,13 +1248,14 @@ fun SavePresetDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
 @Composable
 fun IntervalBellDialog(
     onDismiss: () -> Unit,
-    onConfirm: (Int, String, Int) -> Unit,
+    onConfirm: (Int, String, Int, Float) -> Unit,
     maxSec: Int
 ) {
     var timeMin by remember { mutableStateOf("1") }
     var timeSec by remember { mutableStateOf("0") }
     var repeats by remember { mutableStateOf("1") }
     var soundType by remember { mutableStateOf("interval_bell") }
+    var bellVolume by remember { mutableFloatStateOf(0.7f) }
     val bellTypes = listOf("interval_bell", "starting_bell")
 
     AlertDialog(
@@ -1229,6 +1288,14 @@ fun IntervalBellDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                Text("Volume: ${(bellVolume * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)
+                Slider(
+                    value = bellVolume,
+                    onValueChange = { bellVolume = it },
+                    valueRange = 0f..1f,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 Text("Sound Type", style = MaterialTheme.typography.labelLarge)
                 bellTypes.forEach { type ->
                     Row(
@@ -1248,7 +1315,7 @@ fun IntervalBellDialog(
                 val totalSec = (timeMin.toIntOrNull() ?: 0) * 60 + (timeSec.toIntOrNull() ?: 0)
                 val repeatCount = repeats.toIntOrNull() ?: 1
                 if (totalSec in 1 until maxSec) {
-                    onConfirm(totalSec, soundType, repeatCount)
+                    onConfirm(totalSec, soundType, repeatCount, bellVolume)
                 }
             }) { Text("Add") }
         },
