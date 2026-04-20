@@ -92,8 +92,10 @@ data class Preset(
 interface MeditationDao {
     @Query("SELECT * FROM meditations ORDER BY timestamp DESC")
     fun getAll(): Flow<List<Meditation>>
-    @Insert
-    suspend fun insert(meditation: Meditation)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(meditation: Meditation): Long
+    @Update
+    suspend fun update(meditation: Meditation)
     @Delete
     suspend fun delete(meditation: Meditation)
     @Query("DELETE FROM meditations")
@@ -343,8 +345,14 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
             }
             if (timeLeftSec <= 0 && isRunning) {
                 onPlayBell("starting_bell", 1, startingBellVolume)
-                lastSessionMinutes = initialDurationSec / 60
-                showInsightDialog = true
+                val minutes = initialDurationSec / 60
+                viewModelScope.launch(Dispatchers.IO) {
+                    val newMed = Meditation(timestamp = System.currentTimeMillis(), durationMinutes = minutes)
+                    val id = dao.insert(newMed)
+                    editingMeditation = newMed.copy(id = id.toInt())
+                    showInsightDialog = true
+                }
+                lastSessionMinutes = minutes
                 stopAndResetDND()
             }
         }
@@ -353,8 +361,14 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
     fun stopTimer(scope: CoroutineScope) {
         val elapsedMinutes = (initialDurationSec - timeLeftSec) / 60
         if (timeLeftSec > 0 && elapsedMinutes > 0) {
-            lastSessionMinutes = elapsedMinutes
-            showInsightDialog = true
+            val minutes = elapsedMinutes
+            viewModelScope.launch(Dispatchers.IO) {
+                val newMed = Meditation(timestamp = System.currentTimeMillis(), durationMinutes = minutes)
+                val id = dao.insert(newMed)
+                editingMeditation = newMed.copy(id = id.toInt())
+                showInsightDialog = true
+            }
+            lastSessionMinutes = minutes
         } else {
             timeLeftSec = initialDurationSec
         }
@@ -371,29 +385,29 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
 
     var showInsightDialog by mutableStateOf(false)
         private set
+    var editingMeditation by mutableStateOf<Meditation?>(null)
+        private set
     var lastSessionMinutes by mutableIntStateOf(0)
         private set
 
+    fun onEditInsight(meditation: Meditation) {
+        editingMeditation = meditation
+        showInsightDialog = true
+    }
+
     fun onInsightSubmitted(insight: String, scope: CoroutineScope) {
         viewModelScope.launch(Dispatchers.IO) {
-            dao.insert(Meditation(
-                timestamp = System.currentTimeMillis(),
-                durationMinutes = lastSessionMinutes,
-                insight = insight.ifBlank { null }
-            ))
+            editingMeditation?.let {
+                dao.update(it.copy(insight = insight.ifBlank { null }))
+            }
         }
         showInsightDialog = false
+        editingMeditation = null
     }
 
     fun onInsightDismissed() {
-        viewModelScope.launch(Dispatchers.IO) {
-            saveSession(lastSessionMinutes)
-        }
         showInsightDialog = false
-    }
-
-    private suspend fun saveSession(minutes: Int) {
-        dao.insert(Meditation(timestamp = System.currentTimeMillis(), durationMinutes = minutes))
+        editingMeditation = null
     }
 
     fun deleteMeditation(meditation: Meditation, scope: kotlinx.coroutines.CoroutineScope) {
@@ -587,6 +601,11 @@ fun MeditationApp(vm: MeditationViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .onPreviewKeyEvent { keyEvent ->
+                // Allow system shortcuts (like Ctrl+C, Ctrl+V) even if we consume other keys
+                if (keyEvent.key == Key.C || keyEvent.key == Key.V || keyEvent.key == Key.A || keyEvent.key == Key.X) {
+                    return@onPreviewKeyEvent false
+                }
+
                 if (!isEditingDuration && !vm.showInsightDialog && keyEvent.key == Key.Spacebar) {
                     if (keyEvent.type == KeyEventType.KeyUp) {
                         vm.toggleTimer(scope) { type, repeats, vol -> playBell(type, repeats, vol) }
@@ -1211,6 +1230,9 @@ fun MeditationApp(vm: MeditationViewModel) {
                             }
                             Spacer(modifier = Modifier.weight(1f))
                             if (!isSelectionMode) {
+                                IconButton(onClick = { vm.onEditInsight(session) }) {
+                                    Icon(Icons.Default.Edit, contentDescription = "Edit Insight", tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                                }
                                 IconButton(onClick = { vm.deleteMeditation(session, scope) }) {
                                     Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
                                 }
@@ -1223,10 +1245,10 @@ fun MeditationApp(vm: MeditationViewModel) {
     }
 
     if (vm.showInsightDialog) {
-        var insightText by remember { mutableStateOf("") }
+        var insightText by remember { mutableStateOf(vm.editingMeditation?.insight ?: "") }
         AlertDialog(
             onDismissRequest = { vm.onInsightDismissed() },
-            title = { Text("Session Insight") },
+            title = { Text(if (vm.editingMeditation != null) "Edit Insight" else "Session Insight") },
             text = {
                 Column {
                     Text("Capture any thoughts or feelings from this session (optional):")
@@ -1246,7 +1268,7 @@ fun MeditationApp(vm: MeditationViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { vm.onInsightDismissed() }) {
-                    Text("Skip")
+                    Text(if (vm.editingMeditation != null) "Cancel" else "Skip")
                 }
             }
         )
