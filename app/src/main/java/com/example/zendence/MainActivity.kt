@@ -58,6 +58,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.zendence.ui.theme.ZendenceTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -73,7 +76,8 @@ import java.util.*
 data class Meditation(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val timestamp: Long,
-    val durationMinutes: Int
+    val durationMinutes: Int,
+    val insight: String? = null
 )
 
 @Entity(tableName = "presets")
@@ -103,7 +107,7 @@ interface MeditationDao {
     suspend fun deletePreset(preset: Preset)
 }
 
-@Database(entities = [Meditation::class, Preset::class], version = 2)
+@Database(entities = [Meditation::class, Preset::class], version = 3)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun meditationDao(): MeditationDao
 }
@@ -156,20 +160,64 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
 
     private var previousInterruptionFilter = NotificationManager.INTERRUPTION_FILTER_ALL
 
+    private val sharedPrefs = application.getSharedPreferences("zendence_prefs", Context.MODE_PRIVATE)
+
     var isStartingBellPlaying by mutableStateOf(false)
     var isRunning by mutableStateOf(false)
-    var initialDurationSec by mutableIntStateOf(2700) // Default 45 mins
-    var timeLeftSec by mutableIntStateOf(2700)
+    var initialDurationSec by mutableIntStateOf(sharedPrefs.getInt("initial_duration_sec", 2700))
+    var timeLeftSec by mutableIntStateOf(sharedPrefs.getInt("initial_duration_sec", 2700))
     var selectedMusic by mutableStateOf("Nature Stream")
-    var volume by mutableFloatStateOf(0.5f)
+    var volume by mutableFloatStateOf(sharedPrefs.getFloat("volume", 0.5f))
 
-    var startingBellEnabled by mutableStateOf(true)
-    var startingBellVolume by mutableFloatStateOf(0.7f)
-    val intervalBells = mutableStateListOf<IntervalBell>(
-        IntervalBell(atSecFromStart = 900, soundType = "interval_bell", repeats = 1, volume = 0.5f),
-        IntervalBell(atSecFromStart = 1800, soundType = "interval_bell", repeats = 2, volume = 0.6f),
-        IntervalBell(atSecFromStart = 2699, soundType = "interval_bell", repeats = 3, volume = 0.7f)
-    )
+    var startingBellEnabled by mutableStateOf(sharedPrefs.getBoolean("starting_bell_enabled", true))
+    var startingBellVolume by mutableFloatStateOf(sharedPrefs.getFloat("starting_bell_volume", 0.7f))
+    val intervalBells = mutableStateListOf<IntervalBell>()
+
+    init {
+        // Load interval bells from shared prefs or defaults
+        val bellsJson = sharedPrefs.getString("interval_bells", null)
+        if (bellsJson != null && bellsJson.isNotEmpty()) {
+            loadIntervalBellsFromJson(bellsJson)
+        } else {
+            intervalBells.addAll(
+                listOf(
+                    IntervalBell(atSecFromStart = 900, soundType = "interval_bell", repeats = 1, volume = 0.5f),
+                    IntervalBell(atSecFromStart = 1800, soundType = "interval_bell", repeats = 2, volume = 0.6f),
+                    IntervalBell(atSecFromStart = 2699, soundType = "interval_bell", repeats = 3, volume = 0.7f)
+                )
+            )
+        }
+        fetchQuote()
+    }
+
+    private fun saveCurrentSettings() {
+        val bellsJson = intervalBells.joinToString("|") { "${it.atSecFromStart}:${it.repeats}:${it.soundType}:${it.volume}" }
+        sharedPrefs.edit()
+            .putInt("initial_duration_sec", initialDurationSec)
+            .putFloat("volume", volume)
+            .putBoolean("starting_bell_enabled", startingBellEnabled)
+            .putFloat("starting_bell_volume", startingBellVolume)
+            .putString("interval_bells", bellsJson)
+            .apply()
+    }
+
+    private fun loadIntervalBellsFromJson(json: String) {
+        intervalBells.clear()
+        json.split("|").forEach {
+            val parts = it.split(":")
+            if (parts.size >= 3) {
+                val vol = if (parts.size == 4) parts[3].toFloatOrNull() ?: 1.0f else 1.0f
+                intervalBells.add(
+                    IntervalBell(
+                        atSecFromStart = parts[0].toInt(),
+                        repeats = parts[1].toInt(),
+                        soundType = parts[2],
+                        volume = vol
+                    )
+                )
+            }
+        }
+    }
 
     fun toggleTimer(scope: kotlinx.coroutines.CoroutineScope, onPlayBell: (String, Int, Float) -> Unit) {
         if (isRunning) {
@@ -199,23 +247,8 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
             initialDurationSec = preset.durationMin * 60
             timeLeftSec = initialDurationSec
             volume = preset.volume
-            intervalBells.clear()
-            if (preset.intervalBellsJson.isNotEmpty()) {
-                preset.intervalBellsJson.split("|").forEach {
-                    val parts = it.split(":")
-                    if (parts.size >= 3) {
-                        val vol = if (parts.size == 4) parts[3].toFloatOrNull() ?: 1.0f else 1.0f
-                        intervalBells.add(
-                            IntervalBell(
-                                atSecFromStart = parts[0].toInt(),
-                                repeats = parts[1].toInt(),
-                                soundType = parts[2],
-                                volume = vol
-                            )
-                        )
-                    }
-                }
-            }
+            loadIntervalBellsFromJson(preset.intervalBellsJson)
+            saveCurrentSettings()
         }
     }
 
@@ -238,6 +271,9 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
         if (!isRunning) {
             initialDurationSec = 2700
             timeLeftSec = 2700
+            volume = 0.5f
+            startingBellEnabled = true
+            startingBellVolume = 0.7f
             intervalBells.clear()
             intervalBells.addAll(
                 listOf(
@@ -246,6 +282,7 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
                     IntervalBell(atSecFromStart = 2699, soundType = "interval_bell", repeats = 3, volume = 0.7f)
                 )
             )
+            saveCurrentSettings()
         }
     }
 
@@ -253,6 +290,7 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
         if (!isRunning) {
             initialDurationSec += 60
             timeLeftSec = initialDurationSec
+            saveCurrentSettings()
         }
     }
 
@@ -260,6 +298,7 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
         if (!isRunning && initialDurationSec > 60) {
             initialDurationSec -= 60
             timeLeftSec = initialDurationSec
+            saveCurrentSettings()
         }
     }
 
@@ -267,10 +306,11 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
         if (!isRunning && minutes > 0) {
             initialDurationSec = minutes * 60
             timeLeftSec = initialDurationSec
+            saveCurrentSettings()
         }
     }
 
-    fun startTimer(scope: kotlinx.coroutines.CoroutineScope, onPlayBell: (String, Int, Float) -> Unit = { _, _, _ -> }) {
+    fun startTimer(scope: CoroutineScope, onPlayBell: (String, Int, Float) -> Unit = { _, _, _ -> }) {
         if (timeLeftSec <= 0) {
             timeLeftSec = initialDurationSec
         }
@@ -303,21 +343,22 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
             }
             if (timeLeftSec <= 0 && isRunning) {
                 onPlayBell("starting_bell", 1, startingBellVolume)
-                saveSession(initialDurationSec / 60)
+                lastSessionMinutes = initialDurationSec / 60
+                showInsightDialog = true
                 stopAndResetDND()
             }
         }
     }
 
-    fun stopTimer(scope: kotlinx.coroutines.CoroutineScope) {
+    fun stopTimer(scope: CoroutineScope) {
         val elapsedMinutes = (initialDurationSec - timeLeftSec) / 60
         if (timeLeftSec > 0 && elapsedMinutes > 0) {
-            scope.launch {
-                saveSession(elapsedMinutes)
-            }
+            lastSessionMinutes = elapsedMinutes
+            showInsightDialog = true
+        } else {
+            timeLeftSec = initialDurationSec
         }
         stopAndResetDND()
-        timeLeftSec = initialDurationSec
     }
     
     private fun stopAndResetDND() {
@@ -326,6 +367,29 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
         if (notificationManager.isNotificationPolicyAccessGranted) {
             notificationManager.setInterruptionFilter(previousInterruptionFilter)
         }
+    }
+
+    var showInsightDialog by mutableStateOf(false)
+        private set
+    var lastSessionMinutes by mutableIntStateOf(0)
+        private set
+
+    fun onInsightSubmitted(insight: String, scope: CoroutineScope) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.insert(Meditation(
+                timestamp = System.currentTimeMillis(),
+                durationMinutes = lastSessionMinutes,
+                insight = insight.ifBlank { null }
+            ))
+        }
+        showInsightDialog = false
+    }
+
+    fun onInsightDismissed() {
+        viewModelScope.launch(Dispatchers.IO) {
+            saveSession(lastSessionMinutes)
+        }
+        showInsightDialog = false
     }
 
     private suspend fun saveSession(minutes: Int) {
@@ -347,10 +411,11 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
     fun exportToObsidian(context: Context, history: List<Meditation>) {
         val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
         val content = StringBuilder("# Zendence Meditation History\n\n")
-        content.append("| Date | Duration (min) |\n")
-        content.append("| :--- | :--- |\n")
+        content.append("| Date | Duration (min) | Insight |\n")
+        content.append("| :--- | :--- | :--- |\n")
         history.forEach {
-            content.append("| ${sdf.format(Date(it.timestamp))} | ${it.durationMinutes} |\n")
+            val insight = it.insight ?: ""
+            content.append("| ${sdf.format(Date(it.timestamp))} | ${it.durationMinutes} | $insight |\n")
         }
 
         val intent = Intent(Intent.ACTION_SEND).apply {
@@ -522,7 +587,7 @@ fun MeditationApp(vm: MeditationViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .onPreviewKeyEvent { keyEvent ->
-                if (!isEditingDuration && keyEvent.key == Key.Spacebar) {
+                if (!isEditingDuration && !vm.showInsightDialog && keyEvent.key == Key.Spacebar) {
                     if (keyEvent.type == KeyEventType.KeyUp) {
                         vm.toggleTimer(scope) { type, repeats, vol -> playBell(type, repeats, vol) }
                     }
@@ -1134,6 +1199,15 @@ fun MeditationApp(vm: MeditationViewModel) {
                             Column {
                                 Text("Meditation Session", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, style = TextStyle(shadow = Shadow(Color.Black.copy(alpha = 0.3f), blurRadius = 4f)))
                                 Text(date, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                                if (!session.insight.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "\"${session.insight}\"",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                        fontSize = 12.sp,
+                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                    )
+                                }
                             }
                             Spacer(modifier = Modifier.weight(1f))
                             if (!isSelectionMode) {
@@ -1146,6 +1220,36 @@ fun MeditationApp(vm: MeditationViewModel) {
                 }
             }
         }
+    }
+
+    if (vm.showInsightDialog) {
+        var insightText by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { vm.onInsightDismissed() },
+            title = { Text("Session Insight") },
+            text = {
+                Column {
+                    Text("Capture any thoughts or feelings from this session (optional):")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = insightText,
+                        onValueChange = { insightText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Deep peace...") }
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = { vm.onInsightSubmitted(insightText, scope) }) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { vm.onInsightDismissed() }) {
+                    Text("Skip")
+                }
+            }
+        )
     }
 
     if (showClearHistoryDialog) {
