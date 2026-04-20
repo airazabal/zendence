@@ -343,6 +343,23 @@ class MeditationViewModel(application: android.app.Application) : ViewModel() {
             dao.deleteAll()
         }
     }
+
+    fun exportToObsidian(context: Context, history: List<Meditation>) {
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        val content = StringBuilder("# Zendence Meditation History\n\n")
+        content.append("| Date | Duration (min) |\n")
+        content.append("| :--- | :--- |\n")
+        history.forEach {
+            content.append("| ${sdf.format(Date(it.timestamp))} | ${it.durationMinutes} |\n")
+        }
+
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/markdown"
+            putExtra(Intent.EXTRA_SUBJECT, "Zendence Meditation History")
+            putExtra(Intent.EXTRA_TEXT, content.toString())
+        }
+        context.startActivity(Intent.createChooser(intent, "Export History"))
+    }
 }
 
 // --- 3. UI COMPONENTS ---
@@ -452,6 +469,9 @@ fun MeditationApp(vm: MeditationViewModel) {
             maxSec = vm.initialDurationSec
         )
     }
+
+    val selectedMeditationIds = remember { mutableStateListOf<Int>() }
+    var isSelectionMode by remember { mutableStateOf(false) }
 
     if (showSavePresetDialog) {
         SavePresetDialog(
@@ -975,9 +995,41 @@ fun MeditationApp(vm: MeditationViewModel) {
                             )
                         )
                         Text(streakInfo, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), fontSize = 12.sp)
-                        if (history.isNotEmpty()) {
-                            TextButton(onClick = { showClearHistoryDialog = true }) {
-                                Text("Clear All", color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f), fontSize = 12.sp)
+                        Row {
+                            if (isSelectionMode) {
+                                TextButton(onClick = {
+                                    if (selectedMeditationIds.size == history.size) {
+                                        selectedMeditationIds.clear()
+                                    } else {
+                                        selectedMeditationIds.clear()
+                                        selectedMeditationIds.addAll(history.map { it.id })
+                                    }
+                                }) {
+                                    Text(if (selectedMeditationIds.size == history.size) "Deselect All" else "Select All", fontSize = 12.sp)
+                                }
+                                TextButton(onClick = {
+                                    val selectedSessions = history.filter { it.id in selectedMeditationIds }
+                                    if (selectedSessions.isNotEmpty()) {
+                                        vm.exportToObsidian(context, selectedSessions)
+                                    }
+                                    isSelectionMode = false
+                                    selectedMeditationIds.clear()
+                                }) {
+                                    Text("Export (${selectedMeditationIds.size})", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                                IconButton(onClick = { 
+                                    isSelectionMode = false
+                                    selectedMeditationIds.clear()
+                                }) {
+                                    Icon(Icons.Rounded.Close, contentDescription = "Cancel", modifier = Modifier.size(18.dp))
+                                }
+                            } else if (history.isNotEmpty()) {
+                                TextButton(onClick = { isSelectionMode = true }) {
+                                    Text("Select", fontSize = 12.sp)
+                                }
+                                TextButton(onClick = { showClearHistoryDialog = true }) {
+                                    Text("Clear All", color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f), fontSize = 12.sp)
+                                }
                             }
                         }
                     }
@@ -1031,15 +1083,42 @@ fun MeditationApp(vm: MeditationViewModel) {
                     }
 
                     Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clickable {
+                                if (isSelectionMode) {
+                                    if (selectedMeditationIds.contains(session.id)) {
+                                        selectedMeditationIds.remove(session.id)
+                                    } else {
+                                        selectedMeditationIds.add(session.id)
+                                    }
+                                }
+                            },
+                        color = if (isSelectionMode && selectedMeditationIds.contains(session.id)) 
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                         shape = RoundedCornerShape(16.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, groupColor)
+                        border = if (isSelectionMode && selectedMeditationIds.contains(session.id))
+                                    androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                                 else androidx.compose.foundation.BorderStroke(1.dp, groupColor)
                     ) {
                         Row(
                             modifier = Modifier.padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            if (isSelectionMode) {
+                                Checkbox(
+                                    checked = selectedMeditationIds.contains(session.id),
+                                    onCheckedChange = { checked ->
+                                        if (checked == true) selectedMeditationIds.add(session.id)
+                                        else selectedMeditationIds.remove(session.id)
+                                    },
+                                    modifier = Modifier.scale(0.8f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            
                             Box(
                                 modifier = Modifier.size(40.dp).background(groupColor, CircleShape),
                                 contentAlignment = Alignment.Center
@@ -1057,8 +1136,10 @@ fun MeditationApp(vm: MeditationViewModel) {
                                 Text(date, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                             }
                             Spacer(modifier = Modifier.weight(1f))
-                            IconButton(onClick = { vm.deleteMeditation(session, scope) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                            if (!isSelectionMode) {
+                                IconButton(onClick = { vm.deleteMeditation(session, scope) }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                                }
                             }
                         }
                     }
@@ -1086,6 +1167,40 @@ fun MeditationApp(vm: MeditationViewModel) {
             dismissButton = {
                 TextButton(onClick = { showClearHistoryDialog = false }) {
                     Text("Cancel")
+                }
+            }
+        )
+    }
+
+    val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+    val oldEntries = history.filter { it.timestamp < thirtyDaysAgo }
+    if (oldEntries.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Manage Old Entries") },
+            text = { Text("You have ${oldEntries.size} entries older than 30 days. Would you like to clear them or export them?") },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { 
+                        vm.exportToObsidian(context, history)
+                    }) {
+                        Text("Export")
+                    }
+                    TextButton(
+                        onClick = { 
+                            scope.launch {
+                                oldEntries.forEach { vm.deleteMeditation(it, scope) }
+                            }
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)
+                    ) {
+                        Text("Clear Old")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { /* Could add a 'remind me later' logic here */ }) {
+                    Text("Ignore")
                 }
             }
         )
