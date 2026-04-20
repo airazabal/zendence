@@ -538,6 +538,8 @@ fun MeditationApp(vm: MeditationViewModel) {
         focusRequester.requestFocus()
     }
 
+    val onPreviewBell: (String, Float) -> Unit = { type, vol -> playBell(type, 1, vol) }
+
     if (showIntervalDialog) {
         IntervalBellDialog(
             onDismiss = { showIntervalDialog = false },
@@ -545,6 +547,7 @@ fun MeditationApp(vm: MeditationViewModel) {
                 vm.intervalBells.add(IntervalBell(atSecFromStart = time, soundType = sound, repeats = repeats, volume = vol))
                 showIntervalDialog = false
             },
+            onPreview = onPreviewBell,
             maxSec = vm.initialDurationSec
         )
     }
@@ -569,7 +572,8 @@ fun MeditationApp(vm: MeditationViewModel) {
             onConfirm = { updatedPreset ->
                 vm.updatePreset(presetToEdit!!, updatedPreset, scope)
                 presetToEdit = null
-            }
+            },
+            onPreviewBell = { type, vol -> playBell(type, 1, vol) }
         )
     }
 
@@ -881,6 +885,21 @@ fun MeditationApp(vm: MeditationViewModel) {
                                         }
                                     }
                                 )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                IconButton(
+                                    onClick = {
+                                        scope.launch {
+                                            if (!exoPlayer.isPlaying) {
+                                                exoPlayer.play()
+                                                kotlinx.coroutines.delay(5000)
+                                                if (!vm.isRunning) exoPlayer.pause()
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Preview Music", tint = MaterialTheme.colorScheme.primary)
+                                }
                             }
                         }
                     }
@@ -932,11 +951,20 @@ fun MeditationApp(vm: MeditationViewModel) {
 
                                 if (vm.startingBellEnabled) {
                                     Column(modifier = Modifier.padding(top = 8.dp)) {
-                                        Text(
-                                            "Bell Volume: ${(vm.startingBellVolume * 100).toInt()}%",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                "Bell Volume: ${(vm.startingBellVolume * 100).toInt()}%",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            IconButton(
+                                                onClick = { playBell("starting_bell", 1, vm.startingBellVolume) },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(Icons.Rounded.VolumeUp, contentDescription = "Preview Bell", tint = MaterialTheme.colorScheme.primary)
+                                            }
+                                        }
                                         Slider(
                                             value = vm.startingBellVolume,
                                             onValueChange = { vm.startingBellVolume = it },
@@ -959,6 +987,10 @@ fun MeditationApp(vm: MeditationViewModel) {
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text("${(bell.volume * 100).toInt()}%", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
                                             Spacer(modifier = Modifier.weight(1f))
+                                            IconButton(onClick = { playBell(bell.soundType, 1, bell.volume) }, modifier = Modifier.size(24.dp)) {
+                                                Icon(Icons.Rounded.VolumeUp, contentDescription = "Preview", tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
+                                            }
+                                            Spacer(modifier = Modifier.width(4.dp))
                                             IconButton(onClick = { vm.intervalBells.remove(bell) }, modifier = Modifier.size(24.dp)) {
                                                 Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                                             }
@@ -1338,7 +1370,8 @@ fun MeditationApp(vm: MeditationViewModel) {
 fun EditPresetDialog(
     preset: Preset,
     onDismiss: () -> Unit,
-    onConfirm: (Preset) -> Unit
+    onConfirm: (Preset) -> Unit,
+    onPreviewBell: (String, Float) -> Unit
 ) {
     var name by remember { mutableStateOf(preset.name) }
     var durationMin by remember { mutableStateOf(preset.durationMin.toString()) }
@@ -1415,8 +1448,11 @@ fun EditPresetDialog(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("${(bell.volume * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(modifier = Modifier.weight(1f))
-                            IconButton(onClick = { bells.remove(bell) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete Bell", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                            IconButton(onClick = { onPreviewBell(bell.soundType, bell.volume) }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Rounded.VolumeUp, contentDescription = "Preview Bell", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            }
+                            IconButton(onClick = { bells.remove(bell) }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete Bell", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                             }
                         }
                         Slider(
@@ -1457,6 +1493,7 @@ fun EditPresetDialog(
                 bells.add(IntervalBell(atSecFromStart = time, soundType = sound, repeats = repeats, volume = vol))
                 showAddBell = false
             },
+            onPreview = onPreviewBell,
             maxSec = if (maxSec > 0) maxSec else 3600
         )
     }
@@ -1490,6 +1527,7 @@ fun SavePresetDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
 fun IntervalBellDialog(
     onDismiss: () -> Unit,
     onConfirm: (Int, String, Int, Float) -> Unit,
+    onPreview: (String, Float) -> Unit,
     maxSec: Int
 ) {
     var timeMin by remember { mutableStateOf("1") }
@@ -1529,7 +1567,12 @@ fun IntervalBellDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Text("Volume: ${(bellVolume * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Volume: ${(bellVolume * 100).toInt()}%", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                    IconButton(onClick = { onPreview(soundType, bellVolume) }) {
+                        Icon(Icons.Rounded.VolumeUp, contentDescription = "Preview", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
                 Slider(
                     value = bellVolume,
                     onValueChange = { bellVolume = it },
