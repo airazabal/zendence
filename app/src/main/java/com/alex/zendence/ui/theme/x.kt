@@ -1,4 +1,4 @@
-package com.example.zendence.ui.theme
+package com.alex.zendence.ui.theme
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -6,13 +6,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.zendence.MeditationViewModel
+import com.alex.zendence.MeditationViewModel
 
 @Composable
 fun MeditationTimerScreen(viewModel: MeditationViewModel) {
-    // Note: MeditationViewModel uses timeLeftSec (Int) instead of timeLeft (Flow/State)
-    // and doesn't have a toggleTimer() method yet, so we adapt to its current API.
-    val scope = rememberCoroutineScope()
+    // We observe the state from the ViewModel
+    val seconds = viewModel.timeLeftSec
+    val minutes = seconds / 60
+    val remainingSeconds = seconds % 60
 
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -21,22 +22,17 @@ fun MeditationTimerScreen(viewModel: MeditationViewModel) {
     ) {
         Text(text = "Time Remaining", style = MaterialTheme.typography.labelMedium)
 
-        // Large Countdown Display
         Text(
-            text = String.format("%02d:%02d", viewModel.timeLeftSec / 60, viewModel.timeLeftSec % 60),
+            text = String.format("%02d:%02d", minutes, remainingSeconds),
             style = MaterialTheme.typography.displayLarge
         )
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        Button(onClick = { 
-            if (viewModel.isRunning) {
-                viewModel.isRunning = false 
-            } else {
-                viewModel.startTimer(scope)
-            }
+        Button(onClick = {
+            viewModel.toggleTimer()
         }) {
-            Text(if (viewModel.isRunning) "Pause" else "Start")
+            Text(if (viewModel.isRunning) "Stop" else "Start")
         }
     }
 }

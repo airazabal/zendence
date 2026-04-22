@@ -16,22 +16,24 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Zendence">
 
+        <!-- 1. The Service needs its own intent-filter for MediaSession -->
         <service
-            android:name=".MeditationService"
+            android:name="com.alex.zendence.MeditationService"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
-
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
         <activity
-            android:name=".MainActivity"
+            android:name="com.alex.zendence.MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.Zendence">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
+
                 <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </activity>
     </application>

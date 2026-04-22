@@ -1,4 +1,4 @@
-package com.example.zendence
+package com.alex.zendence
 
 import org.junit.Test
 

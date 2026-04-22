@@ -1,3 +1,7 @@
+import java.util.Properties
+import java.io.FileInputStream
+import java.io.FileOutputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,19 +9,39 @@ plugins {
     alias(libs.plugins.kotlin.ksp)
 }
 
+val versionPropsFile = file("version.properties")
+val versionProps = Properties()
+
+if (!versionPropsFile.exists()) {
+    versionProps["VERSION_CODE"] = "1"
+    versionProps["VERSION_NAME"] = "1.0"
+    versionProps.store(FileOutputStream(versionPropsFile), null)
+}
+
+versionProps.load(FileInputStream(versionPropsFile))
+
+val currentVersionCode = versionProps["VERSION_CODE"].toString().toInt()
+val nextVersionCode = currentVersionCode + 1
+val nextVersionName = "1.$nextVersionCode"
+
+// Update the file for the next build
+versionProps["VERSION_CODE"] = nextVersionCode.toString()
+versionProps["VERSION_NAME"] = nextVersionName
+versionProps.store(FileOutputStream(versionPropsFile), null)
+
 android {
-    namespace = "com.example.zendence"
+    namespace = "com.alex.zendence"
     // API 35 is the current stable maximum. 36 does not exist yet.
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.zendence"
+        applicationId = "com.alex.zendence"
         // minSdk 36 prevents the app from running on any current tablet or emulator.
         // 24 (Android 7.0) or 26 (Android 8.0) is recommended.
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = nextVersionCode
+        versionName = nextVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -47,11 +71,11 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
 dependencies {
-    val roomVersion = "2.8.4"
     val media3Version = "1.3.1"
 
     implementation("androidx.core:core-ktx:1.12.0")
@@ -69,9 +93,9 @@ dependencies {
     implementation("androidx.media3:media3-common:$media3Version")
 
     // Database
-    implementation("androidx.room:room-runtime:$roomVersion")
-    implementation("androidx.room:room-ktx:$roomVersion")
-    ksp("androidx.room:room-compiler:$roomVersion")
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
 
     // Testing
     testImplementation(libs.junit)

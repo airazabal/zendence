@@ -1,4 +1,4 @@
-package com.example.zendence.ui.theme
+package com.alex.zendence.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
