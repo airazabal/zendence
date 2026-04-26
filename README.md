@@ -5,8 +5,9 @@
 ## ✨ Key Features
 
 -   **Customizable Meditation Timer**: Set your preferred duration with an intuitive circular interface.
--   **Session Presets (Templates)**: Save your favorite configurations (duration, volume, and bells) as presets to start your practice instantly.
--   **Dynamic Interval Bells**: Add multiple bells throughout your session to mark milestones. Customize timing, volume, and repeats for each bell.
+-   **Import Custom Sounds**: Load your own background music and bell sounds from local files or web URLs.
+-   **Session Presets (Templates)**: Save your favorite configurations (duration, volume, sound sources, and bells) as presets to start your practice instantly.
+-   **Dynamic Interval Bells**: Add multiple bells throughout your session to mark milestones. Customize timing, sound source, volume, and repeats for each bell.
 -   **Configurable Initial Silence**: Choose exactly how much silence you want at the start of your session before the ambient music begins.
 -   **Ambient Soundscapes**: Built-in nature streams to help ground your focus.
 -   **Daily Wisdom**: Receive a fresh inspirational quote each day to set the tone for your practice.
@@ -26,24 +27,26 @@
 
 ### Managing Presets
 -   **Save Current**: Tap the **Save** icon in the **SESSIONS** section to save your current settings as a new template.
--   **Load**: Tap any session in the list to apply its settings.
--   **Edit**: Tap the **Pencil** icon on a preset to modify its bells or duration. Changes are saved automatically as you tweak them.
+-   **Load**: Tap any session in the list to apply its settings. Loading a preset makes it the **Active Preset**.
+-   **Dynamic Evolution**: While a preset is active, any changes you make to settings (volume, silence, duration, or bells) are **automatically saved** back to that preset.
+-   **Edit**: Tap the **Pencil** icon on a preset to modify its name or duration. 
 -   **Delete**: Use the **Trash** icon to remove a preset.
 
 ### Configuration & Settings
 Tap the **Gear** icon to expand the Settings:
--   **Music Volume**: Control the loudness of the background nature stream.
--   **Initial Silence**: Adjust the slider to set the delay (0-120 seconds) before music starts.
--   **Interval Bells**: Expand this section to add or modify bells. Tap a bell to change its timing, volume, or repetition.
+-   **Music Volume**: Control the loudness of the background nature stream in real-time.
+-   **Custom Background Sound**: Paste a web URL or use the **Folder** icon to pick a local audio file from your device.
+-   **Initial Silence**: Adjust the slider to set the delay (0-120 seconds) before music starts after the starting bell.
+-   **Interval Bells**: Expand this section to add or modify bells. Each bell can have its own **Custom Sound** (URL or local file), volume level, and number of repeats.
 
 ### Custom Readings
-Tap the quote text in the center of the timer to open the full reading. Use the **Edit** icon in the dialog to paste your own scripts, mantras, or reflections.
+Tap the quote text in the center of the timer to open the full reading. Use the **Edit** (pencil) icon in the dialog to paste your own scripts, mantras, or reflections. Tapping the **Check** icon saves your text permanently.
 
 ### History and Streaks
 Tap the **Clock** icon to view your history:
--   **Daily Streak**: Look for the 🔥 icon to see how many contiguous days you have meditated.
--   **Edit Insights**: Tap the pencil next to a past session to update your notes.
--   **Export**: Use the **Share** icon to send your history to Obsidian or other apps.
+-   **Daily Streak**: The 🔥 indicator shows how many consecutive days you've meditated (today or yesterday included).
+-   **Edit Insights**: Tap the pencil next to a past session to update your post-meditation reflections.
+-   **Export**: Use the **Share** icon to send your history to Obsidian or other apps in Markdown format.
 
 ---
 
@@ -55,7 +58,8 @@ Zendence is built with modern Android development best practices:
 -   **Architecture**: Follows the **Repository Pattern** to centralize data from Room and SharedPreferences.
 -   **Database**: Room for local persistence of meditation history and presets.
 -   **Media**: Jetpack Media3 (ExoPlayer) for high-quality audio playback and foreground service management.
--   **Serialization**: Kotlinx Serialization (JSON) for robust storage of complex data structures.
+-   **Serialization**: Kotlinx Serialization (JSON) for robust storage of complex data structures like Interval Bells.
+-   **File Access**: Uses Storage Access Framework (SAF) with persistable URI permissions for custom local sounds.
 -   **Versioning**: Custom Gradle logic for automatic version incrementing on every build.
 
 ---
