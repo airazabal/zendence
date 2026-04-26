@@ -2,6 +2,7 @@
 
 **Zendence** is a modern, minimalist meditation application designed to help you find peace, maintain consistency, and track your spiritual growth. It combines a highly customizable timer with ambient soundscapes, insightful session logging, and daily wisdom.
 
+![Screenshot](images/zendence info.png)
 ## ✨ Key Features
 
 -   **Customizable Meditation Timer**: Set your preferred duration with an intuitive circular interface.
