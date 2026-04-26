@@ -7,6 +7,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FormatQuote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -159,9 +162,13 @@ fun InsightDialog(
 
 @Composable
 fun FullReadingDialog(
+    readingText: String,
+    onSave: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
+    var isEditing by remember { mutableStateOf(false) }
+    var editText by remember { mutableStateOf(readingText) }
+    
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
@@ -169,55 +176,91 @@ fun FullReadingDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.95f))
-                .clickable { onDismiss() },
+                .background(Color.Black.copy(alpha = 0.95f)),
             contentAlignment = Alignment.Center
         ) {
             Column(
                 modifier = Modifier
-                    .padding(horizontal = 40.dp, vertical = 60.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .padding(horizontal = 24.dp, vertical = 60.dp)
+                    .fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(
-                    Icons.Rounded.FormatQuote,
-                    contentDescription = null,
-                    tint = Color(0xFFFF69B4),
-                    modifier = Modifier.size(48.dp)
-                )
-                
-                Spacer(modifier = Modifier.height(32.dp))
-                
-                val meditationText = remember {
-                    try {
-                        context.resources.openRawResource(R.raw.meditation).bufferedReader().use { it.readText() }
-                    } catch (ignore: Exception) {
-                        ""
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { 
+                        if (isEditing) {
+                            onSave(editText)
+                            isEditing = false
+                        } else {
+                            isEditing = true
+                        }
+                    }) {
+                        Icon(
+                            if (isEditing) Icons.Rounded.Check else Icons.Rounded.Edit,
+                            contentDescription = if (isEditing) "Save" else "Edit",
+                            tint = Color(0xFFFF69B4)
+                        )
+                    }
+
+                    Icon(
+                        Icons.Rounded.FormatQuote,
+                        contentDescription = null,
+                        tint = Color(0xFFFF69B4),
+                        modifier = Modifier.size(48.dp)
+                    )
+
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White)
                     }
                 }
                 
-                Text(
-                    text = meditationText,
-                    style = TextStyle(
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Light,
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 30.sp
-                    )
-                )
+                Spacer(modifier = Modifier.height(24.dp))
                 
-                Spacer(modifier = Modifier.height(48.dp))
-                
-                Text(
-                    "CLOSE",
-                    style = TextStyle(
-                        color = Color(0xFFFF69B4),
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp,
-                        fontSize = 14.sp
+                if (isEditing) {
+                    OutlinedTextField(
+                        value = editText,
+                        onValueChange = { editText = it },
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFFF69B4),
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.3f),
+                            cursorColor = Color(0xFFFF69B4)
+                        )
                     )
-                )
+                } else {
+                    Box(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                        Text(
+                            text = readingText,
+                            style = TextStyle(
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Light,
+                                color = Color.White,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 30.sp
+                            )
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                TextButton(onClick = onDismiss) {
+                    Text(
+                        "CLOSE",
+                        style = TextStyle(
+                            color = Color(0xFFFF69B4),
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 2.sp,
+                            fontSize = 14.sp
+                        )
+                    )
+                }
             }
         }
     }

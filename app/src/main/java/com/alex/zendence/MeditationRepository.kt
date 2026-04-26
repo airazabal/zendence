@@ -35,6 +35,11 @@ class MeditationRepository(private val dao: MeditationDao, private val sharedPre
     fun getStartingBellVolume() = sharedPrefs.getFloat("starting_bell_volume", 0.7f)
     fun getIntervalBellsJson() = sharedPrefs.getString("interval_bells", null)
     fun getInitialSilence() = sharedPrefs.getInt("initial_silence_sec", 30)
+    fun getMeditationReading() = sharedPrefs.getString("meditation_reading", null)
+
+    fun saveMeditationReading(text: String) {
+        sharedPrefs.edit().putString("meditation_reading", text).apply()
+    }
 
     fun saveSettings(
         duration: Int,

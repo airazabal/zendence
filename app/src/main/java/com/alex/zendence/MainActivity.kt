@@ -63,6 +63,7 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
     var startingBellEnabled by mutableStateOf(repository.getStartingBellEnabled())
     var startingBellVolume by mutableFloatStateOf(repository.getStartingBellVolume())
     var initialSilenceSec by mutableIntStateOf(repository.getInitialSilence())
+    var meditationReading by mutableStateOf("")
     val intervalBells = mutableStateListOf<IntervalBell>()
 
     private var meditationService: MeditationService? = null
@@ -156,6 +157,25 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
                 )
             )
         }
+        
+        val savedReading = repository.getMeditationReading()
+        if (savedReading != null) {
+            meditationReading = savedReading
+        } else {
+            // Load from resource initially
+            try {
+                getApplication<android.app.Application>().resources.openRawResource(R.raw.meditation).bufferedReader().use {
+                    meditationReading = it.readText()
+                }
+            } catch (e: Exception) {
+                meditationReading = "Let me clear my mind..."
+            }
+        }
+    }
+
+    fun updateMeditationReading(text: String) {
+        meditationReading = text
+        repository.saveMeditationReading(text)
     }
 
     fun fetchQuote() {
@@ -667,7 +687,11 @@ fun MeditationApp(vm: MeditationViewModel = viewModel()) {
         }
 
         if (showFullReading) {
-            FullReadingDialog(onDismiss = { showFullReading = false })
+            FullReadingDialog(
+                readingText = vm.meditationReading,
+                onSave = { vm.updateMeditationReading(it) },
+                onDismiss = { showFullReading = false }
+            )
         }
     }
 }
