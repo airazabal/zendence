@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -28,6 +29,43 @@ fun HistorySection(
     onEditInsightClick: (Meditation) -> Unit,
     onDeleteMeditationClick: (Meditation) -> Unit
 ) {
+    val streak = remember(history) {
+        if (history.isEmpty()) 0
+        else {
+            val calendar = Calendar.getInstance()
+            val today = calendar.get(Calendar.DAY_OF_YEAR)
+            val year = calendar.get(Calendar.YEAR)
+
+            val sessionDays = history.map {
+                calendar.timeInMillis = it.timestamp
+                calendar.get(Calendar.YEAR) to calendar.get(Calendar.DAY_OF_YEAR)
+            }.distinct()
+
+            var currentStreak = 0
+            val checkCal = Calendar.getInstance()
+            
+            // Check starting from today or yesterday
+            val isTodayPresent = sessionDays.any { it.first == year && it.second == today }
+            
+            checkCal.add(Calendar.DAY_OF_YEAR, -1)
+            var isYesterdayPresent = sessionDays.any { it.first == checkCal.get(Calendar.YEAR) && it.second == checkCal.get(Calendar.DAY_OF_YEAR) }
+
+            if (isTodayPresent || isYesterdayPresent) {
+                if (isTodayPresent) {
+                    checkCal.timeInMillis = System.currentTimeMillis() // Start from today
+                } else {
+                    // Start from yesterday already set
+                }
+
+                while (sessionDays.any { it.first == checkCal.get(Calendar.YEAR) && it.second == checkCal.get(Calendar.DAY_OF_YEAR) }) {
+                    currentStreak++
+                    checkCal.add(Calendar.DAY_OF_YEAR, -1)
+                }
+            }
+            currentStreak
+        }
+    }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
         shape = RoundedCornerShape(16.dp)
@@ -38,7 +76,22 @@ fun HistorySection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Recent Sessions", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Recent Sessions", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                    if (streak > 0) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "🔥 $streak day streak",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            )
+                        }
+                    }
+                }
                 Row {
                     IconButton(onClick = onExportClick) {
                         Icon(Icons.Rounded.Share, contentDescription = "Export History", tint = MaterialTheme.colorScheme.primary)
