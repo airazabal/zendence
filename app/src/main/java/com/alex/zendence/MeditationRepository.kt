@@ -1,12 +1,24 @@
 package com.alex.zendence
 
 import android.content.SharedPreferences
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.onStart
 
 class MeditationRepository(private val dao: MeditationDao, private val sharedPrefs: SharedPreferences) {
 
     val history: Flow<List<Meditation>> = dao.getAll()
     val presets: Flow<List<Preset>> = dao.getAllPresets()
+
+    // Reactive flow for all settings changes
+    val settingsFlow: Flow<Unit> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            trySend(Unit)
+        }
+        sharedPrefs.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { sharedPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.onStart { emit(Unit) }
 
     suspend fun getMeditationById(id: Int) = dao.getById(id)
     suspend fun insertMeditation(meditation: Meditation) = dao.insert(meditation)
@@ -22,14 +34,23 @@ class MeditationRepository(private val dao: MeditationDao, private val sharedPre
     fun getStartingBellEnabled() = sharedPrefs.getBoolean("starting_bell_enabled", true)
     fun getStartingBellVolume() = sharedPrefs.getFloat("starting_bell_volume", 0.7f)
     fun getIntervalBellsJson() = sharedPrefs.getString("interval_bells", null)
+    fun getInitialSilence() = sharedPrefs.getInt("initial_silence_sec", 30)
 
-    fun saveSettings(duration: Int, volume: Float, startBell: Boolean, startBellVol: Float, bellsJson: String) {
+    fun saveSettings(
+        duration: Int,
+        volume: Float,
+        startBell: Boolean,
+        startBellVol: Float,
+        bellsJson: String,
+        silenceSec: Int
+    ) {
         sharedPrefs.edit()
             .putInt("initial_duration_sec", duration)
             .putFloat("volume", volume)
             .putBoolean("starting_bell_enabled", startBell)
             .putFloat("starting_bell_volume", startBellVol)
             .putString("interval_bells", bellsJson)
+            .putInt("initial_silence_sec", silenceSec)
             .apply()
     }
 }

@@ -81,7 +81,8 @@ class MeditationService : MediaSessionService() {
         bells: List<IntervalBell>,
         startBellEnabled: Boolean,
         startBellVolume: Float,
-        bgVolume: Float
+        bgVolume: Float,
+        silenceSec: Int
     ) {
         initialDurationSec = durationSec
         _timeLeftSec.value = durationSec
@@ -104,8 +105,8 @@ class MeditationService : MediaSessionService() {
 
             // Start music on a delay without blocking the timer
             serviceScope.launch {
-                if (startingBellEnabled) {
-                    delay(30000)
+                if (silenceSec > 0) {
+                    delay(silenceSec * 1000L)
                 }
                 if (_isRunning.value) {
                     backgroundPlayer?.play()

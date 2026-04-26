@@ -62,6 +62,7 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
 
     var startingBellEnabled by mutableStateOf(repository.getStartingBellEnabled())
     var startingBellVolume by mutableFloatStateOf(repository.getStartingBellVolume())
+    var initialSilenceSec by mutableIntStateOf(repository.getInitialSilence())
     val intervalBells = mutableStateListOf<IntervalBell>()
 
     private var meditationService: MeditationService? = null
@@ -86,8 +87,30 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
     init {
         fetchQuote()
         loadSettings()
+        // No longer observeSettings() here as we want to push changes TO repository
+        // instead of reacting to repository changes in a loop.
+        // We will use snapshotFlow to auto-save.
+        setupAutoSave()
         Intent(application, MeditationService::class.java).also { intent ->
             application.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        }
+    }
+
+    private fun setupAutoSave() {
+        viewModelScope.launch {
+            // Monitor all setting states and save on change
+            snapshotFlow {
+                listOf(
+                    initialDurationSec.toString(),
+                    volume.toString(),
+                    startingBellEnabled.toString(),
+                    startingBellVolume.toString(),
+                    initialSilenceSec.toString(),
+                    intervalBells.toList().toString() // Catch bell changes
+                )
+            }.collectLatest {
+                saveCurrentSettings()
+            }
         }
     }
 
@@ -159,7 +182,8 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
             volume = volume,
             startBell = startingBellEnabled,
             startBellVol = startingBellVolume,
-            bellsJson = bellsJson
+            bellsJson = bellsJson,
+            silenceSec = initialSilenceSec
         )
     }
 
@@ -198,7 +222,8 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
                 bells = intervalBells.toList(),
                 startBellEnabled = startingBellEnabled,
                 startBellVolume = startingBellVolume,
-                bgVolume = volume
+                bgVolume = volume,
+                silenceSec = initialSilenceSec
             )
         }
     }
@@ -225,7 +250,6 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
             timeLeftSec = initialDurationSec
             volume = preset.volume
             loadIntervalBellsFromJson(preset.intervalBellsJson)
-            saveCurrentSettings()
         }
     }
 
@@ -258,6 +282,7 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
             volume = 0.5f
             startingBellEnabled = true
             startingBellVolume = 0.7f
+            initialSilenceSec = 30
             intervalBells.clear()
             intervalBells.addAll(
                 listOf(
@@ -266,7 +291,6 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
                     IntervalBell(atSecFromStart = 2699, soundType = "interval_bell", repeats = 3, volume = 0.7f)
                 )
             )
-            saveCurrentSettings()
         }
     }
 
@@ -274,7 +298,6 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
         if (!isRunning) {
             initialDurationSec += 60
             timeLeftSec = initialDurationSec
-            saveCurrentSettings()
         }
     }
 
@@ -282,7 +305,6 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
         if (!isRunning && initialDurationSec > 60) {
             initialDurationSec -= 60
             timeLeftSec = initialDurationSec
-            saveCurrentSettings()
         }
     }
 
@@ -290,7 +312,6 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
         if (!isRunning && minutes > 0) {
             initialDurationSec = minutes * 60
             timeLeftSec = initialDurationSec
-            saveCurrentSettings()
         }
     }
 
@@ -528,7 +549,6 @@ fun MeditationApp(vm: MeditationViewModel = viewModel()) {
                                 },
                                 onRemoveBellClick = { bell ->
                                     vm.intervalBells.remove(bell)
-                                    vm.saveCurrentSettings()
                                     vm.updateActivePresetIfAny(scope)
                                 }
                             )
@@ -590,7 +610,6 @@ fun MeditationApp(vm: MeditationViewModel = viewModel()) {
                             vm.intervalBells.add(newBell)
                         }
                         vm.intervalBells.sortBy { it.atSecFromStart }
-                        vm.saveCurrentSettings()
                         vm.updateActivePresetIfAny(scope)
                     }
                     showIntervalDialog = false

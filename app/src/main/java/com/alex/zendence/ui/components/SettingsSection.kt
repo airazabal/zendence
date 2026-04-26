@@ -62,6 +62,18 @@ fun SettingsSection(
             }
 
             Column {
+                Text("Initial Silence: ${vm.initialSilenceSec}s", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                Text("Delay before music starts after starting bell", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Slider(
+                    value = vm.initialSilenceSec.toFloat(),
+                    onValueChange = { vm.initialSilenceSec = it.toInt() },
+                    valueRange = 0f..120f,
+                    steps = 24,
+                    colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.secondary, activeTrackColor = MaterialTheme.colorScheme.secondary)
+                )
+            }
+
+            Column {
                 Row(
                     modifier = Modifier.fillMaxWidth().clickable { onBellsExpandedToggle() },
                     verticalAlignment = Alignment.CenterVertically,
