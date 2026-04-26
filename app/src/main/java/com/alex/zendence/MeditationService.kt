@@ -43,8 +43,7 @@ class MeditationService : MediaSessionService() {
     private var startingBellVolume = 0.7f
     private var backgroundVolume = 0.5f
 
-    private lateinit var db: AppDatabase
-    private lateinit var dao: MeditationDao
+    private lateinit var repository: MeditationRepository
 
     inner class LocalBinder : Binder() {
         fun getService(): MeditationService = this@MeditationService
@@ -61,10 +60,7 @@ class MeditationService : MediaSessionService() {
         super.onCreate()
         Log.d("MeditationService", "Service onCreate")
         
-        db = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "meditation-db")
-            .fallbackToDestructiveMigration()
-            .build()
-        dao = db.meditationDao()
+        repository = (application as ZendenceApp).repository
 
         backgroundPlayer = ExoPlayer.Builder(this).build().apply {
             val mediaItem = MediaItem.fromUri("android.resource://${packageName}/raw/nature_stream")
@@ -104,12 +100,17 @@ class MeditationService : MediaSessionService() {
         timerJob = serviceScope.launch {
             if (startingBellEnabled) {
                 playBell(R.raw.starting_bell, 1, startingBellVolume)
-                // Wait for the bell to finish (approx 5-7 seconds depending on the file)
-                // or we can use a listener. For simplicity, delay works well for fixed sounds.
-                delay(7000) 
             }
-            
-            backgroundPlayer?.play()
+
+            // Start music on a delay without blocking the timer
+            serviceScope.launch {
+                if (startingBellEnabled) {
+                    delay(30000)
+                }
+                if (_isRunning.value) {
+                    backgroundPlayer?.play()
+                }
+            }
 
             while (_timeLeftSec.value > 0 && _isRunning.value) {
                 delay(1000)
@@ -151,7 +152,7 @@ class MeditationService : MediaSessionService() {
 
     private fun saveMeditation(minutes: Int) {
         serviceScope.launch(Dispatchers.IO) {
-            val id = dao.insert(Meditation(timestamp = System.currentTimeMillis(), durationMinutes = minutes))
+            val id = repository.insertMeditation(Meditation(timestamp = System.currentTimeMillis(), durationMinutes = minutes))
             _lastSavedMeditationId.value = id
         }
     }

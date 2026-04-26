@@ -2,6 +2,7 @@ package com.alex.zendence
 
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.Serializable
 import java.util.UUID
 
 @Entity(tableName = "meditations")
@@ -17,9 +18,10 @@ data class Preset(
     @PrimaryKey val name: String,
     val durationMin: Int,
     val volume: Float,
-    val intervalBellsJson: String // Format: "time:repeats:type:volume|..."
+    val intervalBellsJson: String // Format: JSON string
 )
 
+@Serializable
 data class IntervalBell(
     val id: String = UUID.randomUUID().toString(),
     val atSecFromStart: Int,
