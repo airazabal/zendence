@@ -33,12 +33,18 @@ class MeditationRepository(private val dao: MeditationDao, private val sharedPre
     fun getVolume() = sharedPrefs.getFloat("volume", 0.5f)
     fun getStartingBellEnabled() = sharedPrefs.getBoolean("starting_bell_enabled", true)
     fun getStartingBellVolume() = sharedPrefs.getFloat("starting_bell_volume", 0.7f)
+    fun getStartingBellUri() = sharedPrefs.getString("starting_bell_uri", "android.resource://com.alex.zendence/raw/starting_bell")
     fun getIntervalBellsJson() = sharedPrefs.getString("interval_bells", null)
     fun getInitialSilence() = sharedPrefs.getInt("initial_silence_sec", 30)
     fun getMeditationReading() = sharedPrefs.getString("meditation_reading", null)
+    fun getBackgroundSoundUri() = sharedPrefs.getString("background_sound_uri", "android.resource://com.alex.zendence/raw/nature_stream")
 
     fun saveMeditationReading(text: String) {
         sharedPrefs.edit().putString("meditation_reading", text).apply()
+    }
+
+    fun saveBackgroundSoundUri(uri: String) {
+        sharedPrefs.edit().putString("background_sound_uri", uri).apply()
     }
 
     fun saveSettings(
@@ -46,6 +52,7 @@ class MeditationRepository(private val dao: MeditationDao, private val sharedPre
         volume: Float,
         startBell: Boolean,
         startBellVol: Float,
+        startBellUri: String,
         bellsJson: String,
         silenceSec: Int
     ) {
@@ -54,6 +61,7 @@ class MeditationRepository(private val dao: MeditationDao, private val sharedPre
             .putFloat("volume", volume)
             .putBoolean("starting_bell_enabled", startBell)
             .putFloat("starting_bell_volume", startBellVol)
+            .putString("starting_bell_uri", startBellUri)
             .putString("interval_bells", bellsJson)
             .putInt("initial_silence_sec", silenceSec)
             .apply()

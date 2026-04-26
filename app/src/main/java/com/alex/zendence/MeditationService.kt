@@ -82,7 +82,9 @@ class MeditationService : MediaSessionService() {
         startBellEnabled: Boolean,
         startBellVolume: Float,
         bgVolume: Float,
-        silenceSec: Int
+        silenceSec: Int,
+        bgSoundUri: String,
+        startBellUri: String
     ) {
         initialDurationSec = durationSec
         _timeLeftSec.value = durationSec
@@ -93,14 +95,17 @@ class MeditationService : MediaSessionService() {
 
         _isRunning.value = true
         backgroundPlayer?.volume = backgroundVolume
-        // Removed backgroundPlayer?.play() from here
+        
+        // Update background player source
+        backgroundPlayer?.setMediaItem(MediaItem.fromUri(bgSoundUri))
+        backgroundPlayer?.prepare()
 
         startForeground(NOTIFICATION_ID, createNotification())
 
         timerJob?.cancel()
         timerJob = serviceScope.launch {
             if (startingBellEnabled) {
-                playBell(R.raw.starting_bell, 1, startingBellVolume)
+                playBell(startBellUri, 1, startingBellVolume)
             }
 
             // Start music on a delay without blocking the timer
@@ -120,15 +125,18 @@ class MeditationService : MediaSessionService() {
                 val elapsedSec = initialDurationSec - _timeLeftSec.value
                 intervalBells.forEach { bell ->
                     if (elapsedSec == bell.atSecFromStart) {
-                        val resId = if (bell.soundType == "interval_bell") R.raw.interval_bell else R.raw.starting_bell
-                        playBell(resId, bell.repeats, bell.volume)
+                        val uri = bell.soundUri ?: if (bell.soundType == "interval_bell") 
+                            "android.resource://${packageName}/${R.raw.interval_bell}" 
+                        else 
+                            startBellUri
+                        playBell(uri, bell.repeats, bell.volume)
                     }
                 }
                 updateNotification()
             }
 
             if (_timeLeftSec.value <= 0 && _isRunning.value) {
-                playBell(R.raw.starting_bell, 1, startingBellVolume)
+                playBell(startBellUri, 1, startingBellVolume)
                 saveMeditation(initialDurationSec / 60)
                 stopMeditation()
             }
@@ -163,8 +171,8 @@ class MeditationService : MediaSessionService() {
         backgroundPlayer?.volume = volume
     }
 
-    private fun playBell(resId: Int, repeats: Int, volume: Float) {
-        val mediaItem = MediaItem.fromUri("android.resource://${packageName}/$resId")
+    private fun playBell(uriString: String, repeats: Int, volume: Float) {
+        val mediaItem = MediaItem.fromUri(uriString)
         bellPlayer?.stop()
         bellPlayer?.clearMediaItems()
         bellPlayer?.volume = volume

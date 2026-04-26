@@ -18,14 +18,18 @@ data class Preset(
     @PrimaryKey val name: String,
     val durationMin: Int,
     val volume: Float,
-    val intervalBellsJson: String // Format: JSON string
+    val intervalBellsJson: String, // Format: JSON string
+    val backgroundSoundUri: String? = null,
+    val startingBellUri: String? = null,
+    val initialSilenceSec: Int? = null
 )
 
 @Serializable
 data class IntervalBell(
     val id: String = UUID.randomUUID().toString(),
     val atSecFromStart: Int,
-    val soundType: String,
+    val soundType: String, // "interval_bell", "starting_bell", or "custom"
     val repeats: Int = 1,
-    val volume: Float = 1.0f
+    val volume: Float = 1.0f,
+    val soundUri: String? = null
 )

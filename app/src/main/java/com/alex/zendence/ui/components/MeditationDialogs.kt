@@ -1,5 +1,7 @@
 package com.alex.zendence.ui.components
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -7,10 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.FormatQuote
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,12 +33,27 @@ import java.util.Date
 fun IntervalBellDialog(
     editingBell: IntervalBell?,
     onDismiss: () -> Unit,
-    onConfirm: (Int, Int, Int, Float) -> Unit
+    onConfirm: (Int, Int, String, Float, String?) -> Unit
 ) {
     var bellAtMin by remember { mutableStateOf(editingBell?.let { (it.atSecFromStart / 60).toString() } ?: "") }
     var bellAtSec by remember { mutableStateOf(editingBell?.let { (it.atSecFromStart % 60).toString() } ?: "") }
     var repeats by remember { mutableStateOf(editingBell?.repeats?.toString() ?: "1") }
     var bellVol by remember { mutableFloatStateOf(editingBell?.volume ?: 0.7f) }
+    var soundUri by remember { mutableStateOf(editingBell?.soundUri ?: "") }
+
+    val context = LocalContext.current
+    val bellPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri ->
+            uri?.let {
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+                soundUri = it.toString()
+            }
+        }
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -53,6 +67,22 @@ fun IntervalBellDialog(
                 OutlinedTextField(value = repeats, onValueChange = { repeats = it }, label = { Text("Repeats") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 
                 Column {
+                    Text("Custom Sound (Optional URL/URI)", fontSize = 12.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = soundUri,
+                            onValueChange = { soundUri = it },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text("Leave empty for default") },
+                            textStyle = TextStyle(fontSize = 11.sp)
+                        )
+                        IconButton(onClick = { bellPickerLauncher.launch(arrayOf("audio/*")) }) {
+                            Icon(Icons.Rounded.FolderOpen, contentDescription = "Pick local file")
+                        }
+                    }
+                }
+
+                Column {
                     Text("Bell Volume: ${(bellVol * 100).toInt()}%", fontSize = 12.sp)
                     Slider(value = bellVol, onValueChange = { bellVol = it })
                 }
@@ -62,8 +92,67 @@ fun IntervalBellDialog(
             Button(onClick = {
                 val totalSec = ((bellAtMin.toIntOrNull() ?: 0) * 60) + (bellAtSec.toIntOrNull() ?: 0)
                 val repeatsInt = repeats.toIntOrNull() ?: 1
-                onConfirm(totalSec, repeatsInt, 0 /* type not used here */, bellVol)
+                onConfirm(totalSec, repeatsInt, "custom", bellVol, soundUri.ifBlank { null })
             }) { Text(if (editingBell != null) "Update" else "Add") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Back") }
+        }
+    )
+}
+
+@Composable
+fun SoundSourceDialog(
+    title: String,
+    initialUri: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var uri by remember { mutableStateOf(initialUri) }
+    val context = LocalContext.current
+    val pickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { selectedUri ->
+            selectedUri?.let {
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        it,
+                        android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (e: Exception) {
+                    // Ignore if permission can't be persisted (e.g. not a local URI)
+                }
+                uri = it.toString()
+            }
+        }
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Enter a web URL or select a local audio file.", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = uri,
+                        onValueChange = { uri = it },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("URL / URI") },
+                        textStyle = TextStyle(fontSize = 12.sp),
+                        singleLine = true
+                    )
+                    IconButton(onClick = { pickerLauncher.launch(arrayOf("audio/*")) }) {
+                        Icon(Icons.Rounded.FolderOpen, contentDescription = "Pick local file")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(uri) }) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Back") }
         }
     )
 }
@@ -85,6 +174,9 @@ fun SavePresetDialog(
                     onConfirm(name)
                 }
             }) { Text(if (presetToEdit != null) "Update" else "Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Back") }
         }
     )
 }

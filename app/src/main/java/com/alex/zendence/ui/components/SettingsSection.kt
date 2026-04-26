@@ -4,16 +4,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ExpandLess
-import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,7 +25,9 @@ fun SettingsSection(
     onBellsExpandedToggle: () -> Unit,
     onAddBellClick: () -> Unit,
     onEditBellClick: (IntervalBell) -> Unit,
-    onRemoveBellClick: (IntervalBell) -> Unit
+    onRemoveBellClick: (IntervalBell) -> Unit,
+    onBackgroundSoundClick: () -> Unit,
+    onStartingBellSoundClick: () -> Unit
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
@@ -46,6 +46,18 @@ fun SettingsSection(
                 )
             }
 
+            Column {
+                Text("Background Sound", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    val label = if (vm.backgroundSoundUri.contains("raw/nature_stream")) "Default Stream" 
+                               else vm.backgroundSoundUri.substringAfterLast("/")
+                    Text(label, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), modifier = Modifier.weight(1f))
+                    IconButton(onClick = onBackgroundSoundClick) {
+                        Icon(Icons.Rounded.Edit, contentDescription = "Edit Background Sound")
+                    }
+                }
+            }
+
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Starting Bell", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
@@ -55,7 +67,17 @@ fun SettingsSection(
             }
 
             if (vm.startingBellEnabled) {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Starting Bell Sound", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        val label = if (vm.startingBellUri.contains("raw/starting_bell")) "Default Bell" 
+                                   else vm.startingBellUri.substringAfterLast("/")
+                        Text(label, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), modifier = Modifier.weight(1f))
+                        IconButton(onClick = onStartingBellSoundClick) {
+                            Icon(Icons.Rounded.Edit, contentDescription = "Edit Starting Bell Sound")
+                        }
+                    }
+
                     Text("Bell Volume", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                     Slider(value = vm.startingBellVolume, onValueChange = { vm.startingBellVolume = it })
                 }

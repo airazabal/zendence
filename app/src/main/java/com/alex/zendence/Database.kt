@@ -26,7 +26,7 @@ interface MeditationDao {
     suspend fun deletePreset(preset: Preset)
 }
 
-@Database(entities = [Meditation::class, Preset::class], version = 3)
+@Database(entities = [Meditation::class, Preset::class], version = 4)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun meditationDao(): MeditationDao
 }

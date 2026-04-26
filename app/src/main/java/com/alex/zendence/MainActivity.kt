@@ -1,15 +1,19 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 package com.alex.zendence
 
+import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -35,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -62,7 +67,9 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
 
     var startingBellEnabled by mutableStateOf(repository.getStartingBellEnabled())
     var startingBellVolume by mutableFloatStateOf(repository.getStartingBellVolume())
+    var startingBellUri by mutableStateOf(repository.getStartingBellUri() ?: "")
     var initialSilenceSec by mutableIntStateOf(repository.getInitialSilence())
+    var backgroundSoundUri by mutableStateOf(repository.getBackgroundSoundUri() ?: "")
     var meditationReading by mutableStateOf("")
     val intervalBells = mutableStateListOf<IntervalBell>()
 
@@ -106,7 +113,9 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
                     volume.toString(),
                     startingBellEnabled.toString(),
                     startingBellVolume.toString(),
+                    startingBellUri,
                     initialSilenceSec.toString(),
+                    backgroundSoundUri,
                     intervalBells.toList().toString() // Catch bell changes
                 )
             }.collectLatest {
@@ -204,9 +213,11 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
             volume = volume,
             startBell = startingBellEnabled,
             startBellVol = startingBellVolume,
+            startBellUri = startingBellUri,
             bellsJson = bellsJson,
             silenceSec = initialSilenceSec
         )
+        repository.saveBackgroundSoundUri(backgroundSoundUri)
     }
 
     private fun loadIntervalBellsFromJson(json: String) {
@@ -245,7 +256,9 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
                 startBellEnabled = startingBellEnabled,
                 startBellVolume = startingBellVolume,
                 bgVolume = volume,
-                silenceSec = initialSilenceSec
+                silenceSec = initialSilenceSec,
+                bgSoundUri = backgroundSoundUri,
+                startBellUri = startingBellUri
             )
         }
     }
@@ -258,7 +271,10 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
             name = name,
             durationMin = initialDurationSec / 60,
             volume = volume,
-            intervalBellsJson = bellsJson
+            intervalBellsJson = bellsJson,
+            backgroundSoundUri = backgroundSoundUri,
+            startingBellUri = startingBellUri,
+            initialSilenceSec = initialSilenceSec
         )
         scope.launch {
             repository.insertPreset(preset)
@@ -271,6 +287,9 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
             initialDurationSec = preset.durationMin * 60
             timeLeftSec = initialDurationSec
             volume = preset.volume
+            preset.backgroundSoundUri?.let { backgroundSoundUri = it }
+            preset.startingBellUri?.let { startingBellUri = it }
+            preset.initialSilenceSec?.let { initialSilenceSec = it }
             loadIntervalBellsFromJson(preset.intervalBellsJson)
         }
     }
@@ -284,7 +303,10 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
             name = currentName,
             durationMin = initialDurationSec / 60,
             volume = volume,
-            intervalBellsJson = bellsJson
+            intervalBellsJson = bellsJson,
+            backgroundSoundUri = backgroundSoundUri,
+            startingBellUri = startingBellUri,
+            initialSilenceSec = initialSilenceSec
         )
         scope.launch {
             repository.insertPreset(preset)
@@ -412,6 +434,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.setFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
+        }
+
         setContent {
             ZendenceTheme {
                 MeditationApp()
@@ -435,6 +464,8 @@ fun MeditationApp(vm: MeditationViewModel = viewModel()) {
     var showSettings by remember { mutableStateOf(false) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var showFullReading by remember { mutableStateOf(false) }
+    var showBackgroundSoundDialog by remember { mutableStateOf(false) }
+    var showStartingBellSoundDialog by remember { mutableStateOf(false) }
     
     var isEditingDuration by remember { mutableStateOf(false) }
     var editValue by remember { mutableStateOf("") }
@@ -572,7 +603,9 @@ fun MeditationApp(vm: MeditationViewModel = viewModel()) {
                                 onRemoveBellClick = { bell ->
                                     vm.intervalBells.remove(bell)
                                     vm.updateActivePresetIfAny(scope)
-                                }
+                                },
+                                onBackgroundSoundClick = { showBackgroundSoundDialog = true },
+                                onStartingBellSoundClick = { showStartingBellSoundDialog = true }
                             )
                         }
 
@@ -616,14 +649,15 @@ fun MeditationApp(vm: MeditationViewModel = viewModel()) {
                     showIntervalDialog = false
                     editingBell = null
                 },
-                onConfirm = { totalSec, repeats, _, bellVol ->
+                onConfirm = { totalSec, repeats, type, bellVol, customUri ->
                     if (totalSec > 0) {
                         val newBell = IntervalBell(
                             id = editingBell?.id ?: UUID.randomUUID().toString(),
                             atSecFromStart = totalSec,
-                            soundType = "interval_bell",
+                            soundType = type,
                             repeats = repeats,
-                            volume = bellVol
+                            volume = bellVol,
+                            soundUri = customUri
                         )
                         editingBell?.let { old ->
                             val index = vm.intervalBells.indexOfFirst { it.id == old.id }
@@ -651,6 +685,30 @@ fun MeditationApp(vm: MeditationViewModel = viewModel()) {
                     vm.savePreset(name, scope)
                     showSavePresetDialog = false
                     presetToEdit = null
+                }
+            )
+        }
+
+        if (showBackgroundSoundDialog) {
+            SoundSourceDialog(
+                title = "Background Sound",
+                initialUri = vm.backgroundSoundUri,
+                onDismiss = { showBackgroundSoundDialog = false },
+                onConfirm = { uri ->
+                    vm.backgroundSoundUri = uri
+                    showBackgroundSoundDialog = false
+                }
+            )
+        }
+
+        if (showStartingBellSoundDialog) {
+            SoundSourceDialog(
+                title = "Starting Bell Sound",
+                initialUri = vm.startingBellUri,
+                onDismiss = { showStartingBellSoundDialog = false },
+                onConfirm = { uri ->
+                    vm.startingBellUri = uri
+                    showStartingBellSoundDialog = false
                 }
             )
         }
