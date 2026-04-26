@@ -29,15 +29,16 @@
 -   **Save Current**: Tap the **Save** icon in the **SESSIONS** section to save your current settings as a new template.
 -   **Load**: Tap any session in the list to apply its settings. Loading a preset makes it the **Active Preset**.
 -   **Dynamic Evolution**: While a preset is active, any changes you make to settings (volume, silence, duration, or bells) are **automatically saved** back to that preset.
--   **Edit**: Tap the **Pencil** icon on a preset to modify its name or duration. 
+-   **Edit**: Tap the **Pencil** icon on a preset to modify its name or duration. Use the **Save** button to confirm or **Back** to cancel.
 -   **Delete**: Use the **Trash** icon to remove a preset.
 
 ### Configuration & Settings
 Tap the **Gear** icon to expand the Settings:
 -   **Music Volume**: Control the loudness of the background nature stream in real-time.
--   **Custom Background Sound**: Paste a web URL or use the **Folder** icon to pick a local audio file from your device.
+-   **Custom Sounds**: Tap the **Pencil** icon next to "Background Sound" or "Starting Bell Sound" to open the source dialog. Paste a web URL or use the **Folder** icon to pick a local file.
 -   **Initial Silence**: Adjust the slider to set the delay (0-120 seconds) before music starts after the starting bell.
 -   **Interval Bells**: Expand this section to add or modify bells. Each bell can have its own **Custom Sound** (URL or local file), volume level, and number of repeats.
+-   **Dialog Navigation**: All configuration dialogs include **Save** and **Back** buttons for clear and easy navigation.
 
 ### Custom Readings
 Tap the quote text in the center of the timer to open the full reading. Use the **Edit** (pencil) icon in the dialog to paste your own scripts, mantras, or reflections. Tapping the **Check** icon saves your text permanently.
