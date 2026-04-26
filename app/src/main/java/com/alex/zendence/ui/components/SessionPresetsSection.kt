@@ -103,7 +103,9 @@ fun SessionPresetsSection(
                                 val bellCount = bellList.size
                                 val bellInfo = if (bellCount > 0) {
                                     val details = bellList.joinToString(", ") {
-                                        "${it.atSecFromStart}s (${(it.volume * 100).toInt()}%)"
+                                        val m = it.atSecFromStart / 60
+                                        val s = it.atSecFromStart % 60
+                                        "${m}m ${s}s (${(it.volume * 100).toInt()}%)"
                                     }
                                     "$bellCount bells: $details"
                                 } else "no bells"

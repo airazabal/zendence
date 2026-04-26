@@ -96,7 +96,7 @@ fun SettingsSection(
                                     onEditBellClick(bell)
                                 }) {
                                     Text("${bell.atSecFromStart / 60}m ${bell.atSecFromStart % 60}s", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
-                                    Text("${bell.repeats}x • ${bell.soundType.replace("_", " ")}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                    Text("${bell.repeats}x • ${bell.soundType.replace("_", " ")} • ${(bell.volume * 100).toInt()}% vol", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                                 }
                                 IconButton(onClick = { onRemoveBellClick(bell) }) {
                                     Icon(Icons.Rounded.Close, contentDescription = "Remove", modifier = Modifier.size(16.dp))

@@ -110,6 +110,8 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
                 )
             }.collectLatest {
                 saveCurrentSettings()
+                // Also update the active preset if there is one
+                updateActivePresetIfAny(this)
             }
         }
     }
