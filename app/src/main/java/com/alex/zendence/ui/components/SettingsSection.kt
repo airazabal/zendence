@@ -27,7 +27,9 @@ fun SettingsSection(
     onEditBellClick: (IntervalBell) -> Unit,
     onRemoveBellClick: (IntervalBell) -> Unit,
     onBackgroundSoundClick: () -> Unit,
-    onStartingBellSoundClick: () -> Unit
+    onStartingBellSoundClick: () -> Unit,
+    onExportClick: () -> Unit,
+    onImportClick: () -> Unit
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
@@ -146,6 +148,29 @@ fun SettingsSection(
                 Icon(Icons.Default.Refresh, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Reset to Defaults", color = MaterialTheme.colorScheme.onErrorContainer)
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onExportClick,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                ) {
+                    Icon(Icons.Rounded.FileUpload, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Export", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+                Button(
+                    onClick = onImportClick,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                ) {
+                    Icon(Icons.Rounded.FileDownload, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Import", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
             }
         }
     }

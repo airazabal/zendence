@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.os.IBinder
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -47,6 +48,7 @@ import com.alex.zendence.ui.components.*
 import com.alex.zendence.ui.theme.ZendenceTheme
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
@@ -428,6 +430,79 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
         super.onCleared()
         getApplication<android.app.Application>().unbindService(connection)
     }
+
+    fun exportConfig(context: Context, uri: android.net.Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val currentPresets = repository.presets.first()
+                val currentHistory = repository.history.first()
+                val config = ZendenceConfig(
+                    initialDurationSec = initialDurationSec,
+                    volume = volume,
+                    startingBellEnabled = startingBellEnabled,
+                    startingBellVolume = startingBellVolume,
+                    startingBellUri = startingBellUri,
+                    initialSilenceSec = initialSilenceSec,
+                    backgroundSoundUri = backgroundSoundUri,
+                    meditationReading = meditationReading,
+                    intervalBells = intervalBells.toList(),
+                    presets = currentPresets,
+                    history = currentHistory
+                )
+                val json = Json.encodeToString(config)
+                context.contentResolver.openOutputStream(uri)?.use {
+                    it.write(json.toByteArray())
+                }
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Settings exported", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Export failed", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    fun importConfig(context: Context, uri: android.net.Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val json = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                if (json != null) {
+                    val config = Json.decodeFromString<ZendenceConfig>(json)
+                    withContext(Dispatchers.Main) {
+                        initialDurationSec = config.initialDurationSec
+                        volume = config.volume
+                        startingBellEnabled = config.startingBellEnabled
+                        startingBellVolume = config.startingBellVolume
+                        startingBellUri = config.startingBellUri
+                        initialSilenceSec = config.initialSilenceSec
+                        backgroundSoundUri = config.backgroundSoundUri
+                        meditationReading = config.meditationReading
+                        intervalBells.clear()
+                        intervalBells.addAll(config.intervalBells)
+
+                        saveCurrentSettings()
+                        repository.saveMeditationReading(config.meditationReading)
+                        
+                        // Handle reading update if it's currently showing
+                        updateMeditationReading(config.meditationReading)
+                    }
+                    config.presets.forEach { repository.insertPreset(it) }
+                    config.history.forEach { repository.insertMeditation(it) }
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(context, "Settings imported", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Import failed", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -471,6 +546,18 @@ fun MeditationApp(vm: MeditationViewModel = viewModel()) {
     var editValue by remember { mutableStateOf("") }
     var isBellsExpanded by remember { mutableStateOf(false) }
     
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let { vm.exportConfig(context, it) }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { vm.importConfig(context, it) }
+    }
+
     val activity = context as? ComponentActivity
     SideEffect {
         if (vm.isRunning) {
@@ -605,7 +692,9 @@ fun MeditationApp(vm: MeditationViewModel = viewModel()) {
                                     vm.updateActivePresetIfAny(scope)
                                 },
                                 onBackgroundSoundClick = { showBackgroundSoundDialog = true },
-                                onStartingBellSoundClick = { showStartingBellSoundDialog = true }
+                                onStartingBellSoundClick = { showStartingBellSoundDialog = true },
+                                onExportClick = { exportLauncher.launch("zendence_config.json") },
+                                onImportClick = { importLauncher.launch(arrayOf("application/json")) }
                             )
                         }
 

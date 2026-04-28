@@ -2,7 +2,7 @@
 
 **Zendence** is a modern, minimalist meditation application designed to help you find peace, maintain consistency, and track your spiritual growth. It combines a highly customizable timer with ambient soundscapes, insightful session logging, and daily wisdom.
 
-![Screenshot](images/zendence%20info.png)
+![Screenshot](images/zendence_info.png)
 ## ✨ Key Features
 
 -   **Customizable Meditation Timer**: Set your preferred duration with an intuitive circular interface.
@@ -15,6 +15,7 @@
 -   **Editable Readings**: Store and update your own meditation scripts or readings directly in the app.
 -   **Session Insights**: Record your thoughts and feelings immediately after every meditation. Edit your insights at any time from your history.
 -   **Consistency Tracking**: Monitor your daily meditation streak with a visual fire indicator in the history panel.
+-   **Backup & Restore**: Export all your settings, custom sound URLs, presets, and meditation history to a local JSON file. Import it later to restore your environment on a new device or after a reinstall.
 -   **Obsidian Integration**: Export your meditation history to Markdown format, optimized for Obsidian or other personal knowledge bases.
 
 ---
@@ -39,6 +40,7 @@ Tap the **Gear** icon to expand the Settings:
 -   **Custom Sounds**: Tap the **Pencil** icon next to "Background Sound" or "Starting Bell Sound" to open the source dialog. Paste a web URL or use the **Folder** icon to pick a local file.
 -   **Initial Silence**: Adjust the slider to set the delay (0-120 seconds) before music starts after the starting bell.
 -   **Interval Bells**: Expand this section to add or modify bells. Each bell can have its own **Custom Sound** (URL or local file), volume level, and number of repeats.
+-   **Backup & Restore**: Use the **Export** and **Import** buttons at the bottom of the Settings panel to save or load your entire configuration (including all presets, meditation history, and custom sound sources) as a JSON file.
 -   **Dialog Navigation**: All configuration dialogs include **Save** and **Back** buttons for clear and easy navigation.
 
 ### Custom Readings
