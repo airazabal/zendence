@@ -21,7 +21,7 @@
 -   **Obsidian Integration**: Export your meditation history to Markdown format, optimized for Obsidian or other personal knowledge bases.
 
 ---
-
+![Screenshot](images/zendence_main.png)
 ## 📖 User Guide
 
 ### Starting a Session
