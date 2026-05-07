@@ -7,7 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,11 +31,45 @@ fun SettingsSection(
     onExportClick: () -> Unit,
     onImportClick: () -> Unit
 ) {
+    var showApiKeyInput by remember { mutableStateOf(false) }
+    var tempApiKey by remember { mutableStateOf(vm.geminiApiKey) }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            Column {
+                Text("Gemini AI Intelligence", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                if (showApiKeyInput) {
+                    OutlinedTextField(
+                        value = tempApiKey,
+                        onValueChange = { tempApiKey = it },
+                        label = { Text("Gemini API Key") },
+                        modifier = Modifier.fillMaxWidth(),
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                vm.updateGeminiApiKey(tempApiKey)
+                                showApiKeyInput = false
+                            }) {
+                                Icon(Icons.Rounded.Check, contentDescription = "Save Key")
+                            }
+                        },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                    )
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (vm.geminiApiKey.isBlank()) "No API Key Set" else "Key: ••••••••••••", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                        TextButton(onClick = { showApiKeyInput = true }) {
+                            Text(if (vm.geminiApiKey.isBlank()) "Add Key" else "Change Key")
+                        }
+                    }
+                }
+                Text("Get a free key at aistudio.google.com to enable AI patterns.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+
             Column {
                 Text("Music Volume", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                 Slider(

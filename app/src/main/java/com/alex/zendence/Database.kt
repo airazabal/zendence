@@ -7,6 +7,10 @@ import kotlinx.coroutines.flow.Flow
 interface MeditationDao {
     @Query("SELECT * FROM meditations ORDER BY timestamp DESC")
     fun getAll(): Flow<List<Meditation>>
+    @Query("SELECT * FROM meditations ORDER BY timestamp DESC")
+    suspend fun getAllList(): List<Meditation>
+    @Query("SELECT * FROM meditations ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getRecent(limit: Int): List<Meditation>
     @Query("SELECT * FROM meditations WHERE id = :id")
     suspend fun getById(id: Int): Meditation?
     @Insert(onConflict = OnConflictStrategy.REPLACE)

@@ -49,6 +49,7 @@ import com.alex.zendence.ui.theme.ZendenceTheme
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
@@ -59,6 +60,9 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
 
     val history = repository.history
     val presets = repository.presets
+    
+    val streak = history.map { repository.calculateStreak(it) }
+    val weeklyMinutes = history.map { repository.calculateWeeklyMinutes(it) }
     
     var dailyQuote by mutableStateOf("Loading wisdom...")
     
@@ -72,6 +76,8 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
     var startingBellUri by mutableStateOf(repository.getStartingBellUri() ?: "")
     var initialSilenceSec by mutableIntStateOf(repository.getInitialSilence())
     var backgroundSoundUri by mutableStateOf(repository.getBackgroundSoundUri() ?: "")
+    var geminiApiKey by mutableStateOf(repository.getGeminiApiKey() ?: "")
+    var aiAnalysis by mutableStateOf("Tap to analyze your trends...")
     var meditationReading by mutableStateOf("")
     val intervalBells = mutableStateListOf<IntervalBell>()
 
@@ -187,6 +193,19 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
     fun updateMeditationReading(text: String) {
         meditationReading = text
         repository.saveMeditationReading(text)
+    }
+
+    fun updateGeminiApiKey(key: String) {
+        geminiApiKey = key
+        repository.saveGeminiApiKey(key)
+    }
+
+    fun performAiAnalysis() {
+        viewModelScope.launch {
+            aiAnalysis = "Analyzing..."
+            val intelligence = AiIntelligence(geminiApiKey)
+            aiAnalysis = intelligence.analyzeInsights(repository.getAllMeditations())
+        }
     }
 
     fun fetchQuote() {
@@ -529,6 +548,7 @@ fun MeditationApp(vm: MeditationViewModel = viewModel()) {
     val context = LocalContext.current
     val history by vm.history.collectAsState(initial = emptyList())
     val presets by vm.presets.collectAsState(initial = emptyList())
+    val streak by vm.streak.collectAsState(initial = 0)
     val scope = rememberCoroutineScope()
     var showIntervalDialog by remember { mutableStateOf(false) }
     var editingBell by remember { mutableStateOf<IntervalBell?>(null) }
@@ -670,6 +690,8 @@ fun MeditationApp(vm: MeditationViewModel = viewModel()) {
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
+                        AiTrendsSection(vm = vm)
+
                         SettingsAndHistoryHeader(
                             showSettings = showSettings,
                             onSettingsToggle = { showSettings = !showSettings },
@@ -701,6 +723,7 @@ fun MeditationApp(vm: MeditationViewModel = viewModel()) {
                         if (showHistory) {
                             HistorySection(
                                 history = history,
+                                streak = streak,
                                 onExportClick = { vm.exportToObsidian(context, history) },
                                 onClearHistoryClick = { showClearHistoryDialog = true },
                                 onEditInsightClick = { vm.onEditInsight(it) },

@@ -99,6 +99,10 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
+    // WorkManager & AI
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.generativeai)
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

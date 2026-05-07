@@ -11,7 +11,9 @@
 -   **Dynamic Interval Bells**: Add multiple bells throughout your session to mark milestones. Customize timing, sound source, volume, and repeats for each bell.
 -   **Configurable Initial Silence**: Choose exactly how much silence you want at the start of your session before the ambient music begins.
 -   **Ambient Soundscapes**: Built-in nature streams to help ground your focus.
+-   **AI Intelligence**: Integrates with Google Gemini to analyze your meditation insights over time, providing summaries of your progress and personalized recommendations.
 -   **Daily Wisdom**: Receive a fresh inspirational quote each day to set the tone for your practice.
+-   **Intelligent Reminders**: Receive daily notifications with up-to-date stats including your current streak and weekly meditation minutes.
 -   **Editable Readings**: Store and update your own meditation scripts or readings directly in the app.
 -   **Session Insights**: Record your thoughts and feelings immediately after every meditation. Edit your insights at any time from your history.
 -   **Consistency Tracking**: Monitor your daily meditation streak with a visual fire indicator in the history panel.
@@ -36,6 +38,7 @@
 
 ### Configuration & Settings
 Tap the **Gear** icon to expand the Settings:
+-   **AI Intelligence**: Enter your Gemini API key (get one for free at aistudio.google.com) to enable pattern analysis and personalized session recommendations.
 -   **Music Volume**: Control the loudness of the background nature stream in real-time.
 -   **Custom Sounds**: Tap the **Pencil** icon next to "Background Sound" or "Starting Bell Sound" to open the source dialog. Paste a web URL or use the **Folder** icon to pick a local file.
 -   **Initial Silence**: Adjust the slider to set the delay (0-120 seconds) before music starts after the starting bell.
