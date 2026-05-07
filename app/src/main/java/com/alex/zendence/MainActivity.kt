@@ -202,9 +202,23 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
 
     fun performAiAnalysis() {
         viewModelScope.launch {
-            aiAnalysis = "Analyzing..."
+            aiAnalysis = "🔍 Gathering your session history..."
+            val meditations = repository.getAllMeditations()
+            
+            val validInsights = meditations.filter { !it.insight.isNullOrBlank() }
+            if (validInsights.isEmpty()) {
+                aiAnalysis = "📝 No insights found. After your next session, try adding a few words about how you feel! The AI needs your reflections to find patterns."
+                return@launch
+            }
+
+            aiAnalysis = "🧠 Analyzing ${validInsights.size} insights with Gemini AI..."
+            delay(800) // Brief delay so the user can read the status
+            
+            aiAnalysis = "✨ Thinking..."
             val intelligence = AiIntelligence(geminiApiKey)
-            aiAnalysis = intelligence.analyzeInsights(repository.getAllMeditations())
+            val result = intelligence.analyzeInsights(meditations)
+            
+            aiAnalysis = result
         }
     }
 

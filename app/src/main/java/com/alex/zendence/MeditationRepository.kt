@@ -92,7 +92,7 @@ class MeditationRepository(private val dao: MeditationDao, private val sharedPre
 
     fun getGeminiApiKey() = sharedPrefs.getString("gemini_api_key", null)
     fun saveGeminiApiKey(key: String) {
-        sharedPrefs.edit().putString("gemini_api_key", key).apply()
+        sharedPrefs.edit().putString("gemini_api_key", key.trim()).apply()
     }
 
     fun saveSettings(

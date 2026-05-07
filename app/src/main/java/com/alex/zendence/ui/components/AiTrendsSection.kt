@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.*
@@ -15,6 +16,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -24,6 +27,7 @@ import com.alex.zendence.MeditationViewModel
 @Composable
 fun AiTrendsSection(vm: MeditationViewModel) {
     var isExpanded by remember { mutableStateOf(false) }
+    val clipboardManager = LocalClipboardManager.current
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)),
@@ -46,27 +50,65 @@ fun AiTrendsSection(vm: MeditationViewModel) {
 
             AnimatedVisibility(visible = isExpanded) {
                 Column(modifier = Modifier.padding(top = 16.dp)) {
-                    Text(
-                        text = vm.aiAnalysis,
-                        style = TextStyle(
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            lineHeight = 20.sp
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 300.dp)
-                            .verticalScroll(rememberScrollState())
-                    )
+                    val isAnalyzing = vm.aiAnalysis.contains("Gathering") || 
+                                     vm.aiAnalysis.contains("Analyzing") || 
+                                     vm.aiAnalysis.contains("Thinking")
+
+                    if (isAnalyzing) {
+                        Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = vm.aiAnalysis,
+                            style = TextStyle(
+                                fontSize = 14.sp,
+                                color = if (vm.aiAnalysis.startsWith("❌") || vm.aiAnalysis.startsWith("❗")) 
+                                    MaterialTheme.colorScheme.error 
+                                else MaterialTheme.colorScheme.onSurface,
+                                lineHeight = 20.sp
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 500.dp)
+                                .verticalScroll(rememberScrollState())
+                                .padding(end = 40.dp) // Space for copy button
+                        )
+
+                        val showCopy = vm.aiAnalysis.isNotBlank() && 
+                                      !isAnalyzing && 
+                                      vm.aiAnalysis != "Tap to analyze your trends..."
+
+                        if (showCopy) {
+                            IconButton(
+                                onClick = { clipboardManager.setText(AnnotatedString(vm.aiAnalysis)) },
+                                modifier = Modifier.align(Alignment.TopEnd)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.ContentCopy, 
+                                    contentDescription = "Copy Results",
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                    }
                     
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     Button(
                         onClick = { vm.performAiAnalysis() },
+                        enabled = !isAnalyzing,
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
-                        Text("Analyze My Patterns")
+                        if (isAnalyzing) {
+                            Text("Processing...")
+                        } else {
+                            Text("Analyze My Patterns")
+                        }
                     }
                 }
             }
