@@ -46,6 +46,11 @@ Tap the **Gear** icon to expand the Settings:
 -   **Backup & Restore**: Use the **Export** and **Import** buttons at the bottom of the Settings panel to save or load your entire configuration (including all presets, meditation history, and custom sound sources) as a JSON file.
 -   **Dialog Navigation**: All configuration dialogs include **Save** and **Back** buttons for clear and easy navigation.
 
+### AI Trends & Insights
+-   **Unlock Patterns**: Tap the **AI Insights & Trends** card above the history section to generate a deep analysis of your recent practice.
+-   **Personalized Advice**: The AI provides a summary of your mood trends and suggests specific session durations or focus areas for your next meditation.
+-   **Privacy Focused**: Your insights are only processed when you request an analysis, and you have full control over your API key.
+
 ### Custom Readings
 Tap the quote text in the center of the timer to open the full reading. Use the **Edit** (pencil) icon in the dialog to paste your own scripts, mantras, or reflections. Tapping the **Check** icon saves your text permanently.
 
@@ -65,6 +70,8 @@ Zendence is built with modern Android development best practices:
 -   **Architecture**: Follows the **Repository Pattern** to centralize data from Room and SharedPreferences.
 -   **Database**: Room for local persistence of meditation history and presets.
 -   **Media**: Jetpack Media3 (ExoPlayer) for high-quality audio playback and foreground service management.
+-   **AI**: Google Gemini Pro (via Generative AI SDK) for natural language insight analysis and pattern recognition.
+-   **Background Tasks**: WorkManager for reliable scheduling of daily intelligent notifications.
 -   **Serialization**: Kotlinx Serialization (JSON) for robust storage of complex data structures like Interval Bells.
 -   **File Access**: Uses Storage Access Framework (SAF) with persistable URI permissions for custom local sounds.
 -   **Versioning**: Custom Gradle logic for automatic version incrementing on every build.
