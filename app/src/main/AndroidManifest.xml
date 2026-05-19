@@ -19,6 +19,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Zendence">
 
+        <provider
+            android:name=".MeditationContentProvider"
+            android:authorities="com.alex.zendence.meditationprovider"
+            android:exported="true" />
+
         <!-- 1. The Service needs its own intent-filter for MediaSession -->
         <service
             android:name="com.alex.zendence.MeditationService"
