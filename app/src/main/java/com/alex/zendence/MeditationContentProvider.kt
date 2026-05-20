@@ -29,12 +29,11 @@ class MeditationContentProvider : ContentProvider() {
 
     override fun onCreate(): Boolean {
         context?.let { ctx ->
-            db = Room.databaseBuilder(
-                ctx.applicationContext,
-                AppDatabase::class.java,
-                "meditations.db"
-            ).build()
-            return true
+            val app = ctx.applicationContext as? ZendenceApp
+            if (app != null) {
+                db = app.database
+                return true
+            }
         }
         return false
     }

@@ -8,8 +8,12 @@ import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 class ZendenceApp : Application() {
+    companion object {
+        const val DB_NAME = "meditation.db"
+    }
+    
     val database by lazy {
-        Room.databaseBuilder(this, AppDatabase::class.java, "meditation-db")
+        Room.databaseBuilder(this, AppDatabase::class.java, DB_NAME)
             .fallbackToDestructiveMigration()
             .build()
     }
