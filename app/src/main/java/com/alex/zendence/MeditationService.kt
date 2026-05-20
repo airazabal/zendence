@@ -37,11 +37,15 @@ class MeditationService : MediaSessionService() {
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning
 
+    private val _isPaused = MutableStateFlow(false)
+    val isPaused: StateFlow<Boolean> = _isPaused
+
     private var initialDurationSec = 0
     private var intervalBells = listOf<IntervalBell>()
     private var startingBellEnabled = true
     private var startingBellVolume = 0.7f
     private var backgroundVolume = 0.5f
+    private var savedStartBellUri = ""
 
     private lateinit var repository: MeditationRepository
 
@@ -92,55 +96,69 @@ class MeditationService : MediaSessionService() {
         startingBellEnabled = startBellEnabled
         startingBellVolume = startBellVolume
         backgroundVolume = bgVolume
+        savedStartBellUri = startBellUri
+        _isPaused.value = false
 
         _isRunning.value = true
         backgroundPlayer?.volume = backgroundVolume
-        
-        // Update background player source
         backgroundPlayer?.setMediaItem(MediaItem.fromUri(bgSoundUri))
         backgroundPlayer?.prepare()
 
         startForeground(NOTIFICATION_ID, createNotification())
 
-        timerJob?.cancel()
-        timerJob = serviceScope.launch {
+        serviceScope.launch {
             if (startingBellEnabled) {
                 playBell(startBellUri, 1, startingBellVolume)
             }
-
-            // Start music on a delay without blocking the timer
             serviceScope.launch {
                 if (silenceSec > 0) {
                     delay(silenceSec * 1000L)
                 }
-                if (_isRunning.value) {
+                if (_isRunning.value && !_isPaused.value) {
                     backgroundPlayer?.play()
                 }
             }
+        }
+        startTimerLoop()
+    }
 
+    private fun startTimerLoop() {
+        timerJob?.cancel()
+        timerJob = serviceScope.launch {
             while (_timeLeftSec.value > 0 && _isRunning.value) {
                 delay(1000)
                 _timeLeftSec.value -= 1
-
                 val elapsedSec = initialDurationSec - _timeLeftSec.value
                 intervalBells.forEach { bell ->
                     if (elapsedSec == bell.atSecFromStart) {
-                        val uri = bell.soundUri ?: if (bell.soundType == "interval_bell") 
-                            "android.resource://${packageName}/${R.raw.interval_bell}" 
-                        else 
-                            startBellUri
+                        val uri = bell.soundUri ?: if (bell.soundType == "interval_bell")
+                            "android.resource://${packageName}/${R.raw.interval_bell}"
+                        else savedStartBellUri
                         playBell(uri, bell.repeats, bell.volume)
                     }
                 }
                 updateNotification()
             }
-
             if (_timeLeftSec.value <= 0 && _isRunning.value) {
-                playBell(startBellUri, 1, startingBellVolume)
+                playBell(savedStartBellUri, 1, startingBellVolume)
                 saveMeditation(initialDurationSec / 60)
                 stopMeditation()
             }
         }
+    }
+
+    fun pauseMeditation() {
+        _isPaused.value = true
+        timerJob?.cancel()
+        backgroundPlayer?.pause()
+        updateNotification()
+    }
+
+    fun resumeMeditation() {
+        _isPaused.value = false
+        backgroundPlayer?.play()
+        startTimerLoop()
+        updateNotification()
     }
 
     fun stopMeditation() {
@@ -148,7 +166,7 @@ class MeditationService : MediaSessionService() {
         if (_isRunning.value && _timeLeftSec.value > 0 && elapsedMinutes > 0) {
             saveMeditation(elapsedMinutes)
         }
-        
+        _isPaused.value = false
         _isRunning.value = false
         timerJob?.cancel()
         backgroundPlayer?.pause()
@@ -195,9 +213,10 @@ class MeditationService : MediaSessionService() {
 
     private fun createNotification(): Notification {
         val timeStr = String.format(Locale.getDefault(), "%02d:%02d", _timeLeftSec.value / 60, _timeLeftSec.value % 60)
+        val status = if (_isPaused.value) "Paused" else "Meditation in progress"
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Zendence")
-            .setContentText("Meditation in progress - $timeStr remaining")
+            .setContentText("$status - $timeStr remaining")
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setOngoing(true)
             .build()

@@ -108,7 +108,11 @@ fun TimerDisplay(
             )
 
             Text(
-                text = if (vm.isRunning) "BREATHE" else "READY",
+                text = when {
+                    vm.isRunning && vm.isPaused -> "PAUSED"
+                    vm.isRunning -> "BREATHE"
+                    else -> "READY"
+                },
                 style = TextStyle(
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 4.sp,

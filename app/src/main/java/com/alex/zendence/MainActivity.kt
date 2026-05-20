@@ -67,6 +67,7 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
     var dailyQuote by mutableStateOf("Loading wisdom...")
     
     var isRunning by mutableStateOf(false)
+    var isPaused by mutableStateOf(false)
     var initialDurationSec by mutableIntStateOf(repository.getInitialDuration())
     var timeLeftSec by mutableIntStateOf(repository.getInitialDuration())
     var volume by mutableFloatStateOf(repository.getVolume())
@@ -138,6 +139,11 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
         viewModelScope.launch {
             meditationService?.isRunning?.collectLatest { running ->
                 isRunning = running
+            }
+        }
+        viewModelScope.launch {
+            meditationService?.isPaused?.collectLatest { paused ->
+                isPaused = paused
             }
         }
         viewModelScope.launch {
@@ -296,6 +302,18 @@ class MeditationViewModel(application: android.app.Application) : androidx.lifec
                 startBellUri = startingBellUri
             )
         }
+    }
+
+    fun pauseTimer() {
+        meditationService?.pauseMeditation()
+    }
+
+    fun resumeTimer() {
+        meditationService?.resumeMeditation()
+    }
+
+    fun stopTimer() {
+        meditationService?.stopMeditation()
     }
 
     fun savePreset(name: String, scope: CoroutineScope) {
@@ -753,19 +771,56 @@ fun MeditationApp(vm: MeditationViewModel = viewModel()) {
             }
         }
 
-        FloatingActionButton(
-            onClick = { vm.toggleTimer() },
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 60.dp).size(80.dp),
-            containerColor = MaterialTheme.colorScheme.primary,
-            shape = CircleShape,
-            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 12.dp, pressedElevation = 4.dp)
-        ) {
-            Icon(
-                if (vm.isRunning) Icons.Rounded.Stop else Icons.Rounded.PlayArrow,
-                contentDescription = if (vm.isRunning) "Stop" else "Start",
-                modifier = Modifier.size(40.dp),
-                tint = MaterialTheme.colorScheme.onPrimary
-            )
+        if (!vm.isRunning) {
+            FloatingActionButton(
+                onClick = { vm.toggleTimer() },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 60.dp).size(80.dp),
+                containerColor = MaterialTheme.colorScheme.primary,
+                shape = CircleShape,
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 12.dp, pressedElevation = 4.dp)
+            ) {
+                Icon(
+                    Icons.Rounded.PlayArrow,
+                    contentDescription = "Start",
+                    modifier = Modifier.size(40.dp),
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 60.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FloatingActionButton(
+                    onClick = { if (vm.isPaused) vm.resumeTimer() else vm.pauseTimer() },
+                    modifier = Modifier.size(72.dp),
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    shape = CircleShape,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 12.dp, pressedElevation = 4.dp)
+                ) {
+                    Icon(
+                        if (vm.isPaused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
+                        contentDescription = if (vm.isPaused) "Resume" else "Pause",
+                        modifier = Modifier.size(36.dp),
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+                FloatingActionButton(
+                    onClick = { vm.stopTimer() },
+                    modifier = Modifier.size(72.dp),
+                    containerColor = MaterialTheme.colorScheme.error,
+                    shape = CircleShape,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 12.dp, pressedElevation = 4.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.Stop,
+                        contentDescription = "Stop",
+                        modifier = Modifier.size(36.dp),
+                        tint = MaterialTheme.colorScheme.onError
+                    )
+                }
+            }
         }
 
         if (showIntervalDialog) {
